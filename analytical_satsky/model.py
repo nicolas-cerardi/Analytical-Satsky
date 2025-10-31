@@ -9,9 +9,6 @@ import astropy.constants as const
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy.time import Time
 
-#R_earth = 6378 * u.km
-#M_earth = 5.9722*1e24 *u.kg
-#G = 6.6743 *1e-11*(u.m*u.m*u.m/u.kg/u.s/u.s)
 w_earth = 1/86164.098903691 * 2 * np.pi * u.rad / u.s
 
 def single_sat_density(lat, i, hsat):
@@ -50,7 +47,7 @@ def compute_geocentric_vs(i, lat, lon, hsat):
     '''equation A.6, A.7 and A.11
     '''
     # compute the orbital velocity norm
-    v_norm = np.sqrt((const.G*const.M_earth)/((const.R_earth+hsat).to(u.m)))
+    v_norm = np.sqrt((const.G*const.M_earth)/((const.R_earth+hsat).to(u.m))).to(u.km/u.s)
 
     # compute the velocity direction
     sin_lambda = np.tan(lat.to(u.rad))/np.tan(i)
@@ -142,6 +139,81 @@ def get_highest_time(start_day, obslat, obslon, obsheight, target_str):
         alt.append(targetaltaz.alt.to(u.deg).value)
     highest_idx = np.argmax(np.array(alt))
     return times[highest_idx], target.ra.deg, target.dec.deg #This is the JD of the center of the observing window
+
+def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_ra, Lfov, obslength):
+    '''
+    Compute the satellite density for a given shell.
+
+    Parameters
+    ----------
+    obslat : astropy Quantity
+        Latitude of the observer (in rad).
+    obslon : astropy Quantity
+        Longitude of the observer (in rad).
+    i : astropy Quantity
+        Inclination of the shell (in rad).
+    Nsat : int
+        Number of satellites in the shell.
+    hsat : astropy Quantity
+        Altitude of the shell (in km).
+    target_dec : astropy Quantity
+        Declination of the target (in rad).
+    target_ra : astropy Quantity
+        Right ascension of the target (in rad).
+    Lfov : astropy Quantity
+        Field of view of the telescope (in rad).
+    obslength : astropy Quantity
+        Length of the observation (in s).
+
+    Returns
+    -------
+    nsats : astropy Quantity
+        Number of satellites expected at the target dec and ra during the observation.
+    '''
+    d, lat, lon = compute_d_phi(obslat, hsat, target_dec, target_ra)
+    cosalpha = compute_cosalpha(d, hsat)
+    P_sat = single_sat_density(lat, i, hsat) #
+    rho_sat = satellite_density(Nsat, lat, i, hsat, d, cosalpha)
+    wsat = compute_wsat(i, lat, lon, hsat, obslat, obslon, target_dec, target_ra)
+    nsats = np.nan_to_num(compute_nsats(rho_sat, Lfov, wsat/d.to(u.m)*u.rad, obslength))
+    return nsats.to(u.rad*u.rad)
+
+def compute_total_satellite_density(obslat, obslon, shells, target_dec, target_ra, Lfov, obslength):
+    '''
+    Compute the total satellite density for a list of shells.
+
+    Parameters
+    ----------
+    obslat : astropy Quantity
+        Latitude of the observer (in rad).
+    obslon : astropy Quantity
+        Longitude of the observer (in rad).
+    shells: pandas DataFrame
+        DataFrame containing the shell parameters (inclination in deg, altitude in km, number of satellites).
+    target_dec : astropy Quantity
+        Declination of the target (in rad).
+    target_ra : astropy Quantity
+        Right ascension of the target (in rad).
+    Lfov : astropy Quantity
+        Field of view of the telescope (in rad).
+    obslength : astropy Quantity
+        Length of the observation (in s).
+
+    Returns
+    -------
+    total_nsats : astropy Quantity
+        Total number of satellites expected at the target dec and ra during the observation.
+    '''
+    total_nsats = 0
+    nshells = shells.shape[0]
+    for idx in range(nshells):
+        i = (shells['i'][idx]*u.deg).to(u.rad)
+        Nsat = shells['n'][idx]
+        hsat = shells['h'][idx] * u.km
+        nsats = compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_ra, Lfov, obslength)
+        total_nsats += nsats
+    return total_nsats
+
 
 def run_analytical_ska(obslat, obslon, obstime, obslength, target_dec, target_ra, shells_i, shells_h, shells_n, Lfov, nstat=100):
     location = EarthLocation(lat=obslat, lon=obslon)
