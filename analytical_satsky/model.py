@@ -12,21 +12,71 @@ from astropy.time import Time
 w_earth = 1/86164.098903691 * 2 * np.pi * u.rad / u.s
 
 def single_sat_density(lat, i, hsat):
-    '''equation A.14
-    P(lat, i hsat) = 1/(2 pi^2 (Re + hsat)^2 (sin^2 i - sin^2 lat)^1/2)
+    '''equation A.3
+    P(lat, i, hsat) = 1/(2 pi^2 (Re + hsat)^2 (sin^2 i - sin^2 lat)^1/2)
+
+    Parameters
+    ----------
+    lat : astropy Quantity
+        Latitude grid (in rad).
+    i : astropy Quantity
+        Inclination of the orbits in the shell (in rad).
+    hsat : astropy Quantity
+        Altitude of the shell.
+
+    Returns
+    -------
+    singsat_density : astropy Quantity
+        density probability for a single satellite to lie at the given latitudes.
     '''
-    res = np.zeros(lat.shape)/u.km/u.km
-    res[np.abs(lat)<i] = 1/(2*np.pi**2 * (const.R_earth+hsat)**2 * (np.sin(i)**2-np.sin(lat[np.abs(lat)<i])**2)**.5)
-    return res
+    singsat_density = np.zeros(lat.shape)/u.km/u.km
+    singsat_density[np.abs(lat)<i] = 1/(2*np.pi**2 * (const.R_earth+hsat)**2 * (np.sin(i)**2-np.sin(lat[np.abs(lat)<i])**2)**.5)
+    return singsat_density
 
 def satellite_density(Nsat, lat, i, hsat, d, cosalpha):
     '''equation 3
     rho_sat = Nsat * P(lat, i, hsat) * (d^2 A)/(cos alpha), with A=1 here
+
+    Parameters
+    ----------
+    Nsat : float
+        Number of satellites in the shell.
+    lat : astropy Quantity
+        Latitude grid (in rad).
+    i : astropy Quantity
+        Inclination of the orbits in the shell (in rad).
+    hsat : astropy Quantity
+        Altitude of the shell.
+    d : astropy Quantity
+        Distance from observer to shell segment intersected by the l.o.s.
+    cosalpha : astropy Quantity
+        Cosine of the impact angle.
+    
+    Returns
+    -------
+    sat_density : astropy Quantity
+        Satellite density at the given latitudes.
     '''
     return Nsat*single_sat_density(lat, i, hsat)*d**2/cosalpha #*A
 
 def compute_vdirection(Omega, i, lat, lon):
     ''' equation A.8 to A.11
+
+    Parameters
+    ----------
+    Omega : astropy Quantity
+        Longitude of ascending node (in rad).
+    i : astropy Quantity
+        Inclination of the orbits in the shell (in rad).
+    lat : astropy Quantity
+        Latitude grid (in rad).
+    lon : astropy Quantity
+        Longitude grid (in rad).
+    
+    Returns
+    -------
+    v_direction : astropy Quantity
+        Unit vector of the satellite velocity direction at the given latitudes and longitudes.
     '''
     #unit vector from earth center to ascending node
     CA = np.stack([np.cos(Omega.to(u.rad)), np.sin(Omega.to(u.rad)), np.zeros(Omega.shape)])
@@ -45,6 +95,22 @@ def compute_vdirection(Omega, i, lat, lon):
 
 def compute_geocentric_vs(i, lat, lon, hsat):
     '''equation A.6, A.7 and A.11
+
+    Parameters
+    ----------
+    i : astropy Quantity
+        Inclination of the orbits in the shell (in rad).
+    lat : astropy Quantity
+        Latitude grid (in rad).
+    lon : astropy Quantity
+        Longitude grid (in rad).
+    hsat : astropy Quantity
+        Altitude of the shell.  
+    
+    Returns
+    -------
+    V_N, V_S : astropy Quantity
+        Geocentric velocity vectors for the northward and southward moving satellites.
     '''
     # compute the orbital velocity norm
     v_norm = np.sqrt((const.G*const.M_earth)/((const.R_earth+hsat).to(u.m))).to(u.km/u.s)
@@ -59,9 +125,22 @@ def compute_geocentric_vs(i, lat, lon, hsat):
 
 def compute_topocentric_v(v, obs_lat, obs_lon):
     '''equation A.12
+
+    Parameters
+    ----------
+    v : astropy Quantity
+        Geocentric velocity vectors.
+    obs_lat : astropy Quantity
+        Observer latitude (in rad).
+    obs_lon : astropy Quantity
+        Observer longitude (in rad).
+
+    Returns
+    -------
+    v_topo : astropy Quantity
+        Topocentric velocity vectors.
     '''
     v_obs = w_earth*const.R_earth*np.cos(obs_lat.to(u.rad))*np.array([-np.sin(obs_lon.to(u.rad)), np.cos(obs_lon.to(u.rad)), 0])
-    #print(v.shape, v.unit, v_obs.unit)
     return v - v_obs[:,np.newaxis,np.newaxis]/u.rad
 
 def compute_apparent_v(v, target_dec, target_ra):
@@ -127,18 +206,42 @@ def compute_nsats(rho_sat, Lfov, wsat, texp):
     return rho_sat*(np.pi*(Lfov/2)**2 + Lfov*wsat.to(u.deg/u.s)*texp).to(u.rad*u.rad)
 
 
-def get_highest_time(start_day, obslat, obslon, obsheight, target_str):
-    """ obslat and obslon in degrees. obsheight in meters. """
+def get_highest_time(obslat, obslon, obsheight, target_dec, target_ra, start_day=2460753, nsteps=3600):
+    """ Find the time when the target is highest in the sky
+
+    Parameters
+    ----------
+    obslat : float
+        Observer latitude in degrees.
+    obslon : float
+        Observer longitude in degrees.
+    obsheight : float
+        Observer height in meters.
+    target_dec : float or array
+        Target declination in degrees.
+    target_ra : float or array
+        Target right ascension in degrees.
+    start_day : float, optional
+        Start day in Julian Date. Default is 2460753 (March 18, 2025).
+    nsteps : int, optional
+        Number of time steps to sample within the observing window. Default is 3600.
+    
+    Returns
+    -------
+    highest_time : astropy Time
+        Time when the target is highest in the sky during the observing window.
+    """
     end_day = start_day + 1.0
-    times = Time(np.linspace(start_day, end_day, 360), format='jd', scale='utc')
+    times = Time(np.linspace(start_day, end_day, nsteps), format='jd', scale='utc')
     observer = EarthLocation(lat=obslat, lon=obslon, height=obsheight)
-    target = SkyCoord(target_str, unit=(u.hourangle, u.deg))
+    #target = SkyCoord(target_str, unit=(u.hourangle, u.deg))
+    target = SkyCoord(target_ra, target_dec, unit=(u.deg, u.deg))
     alt=[]
     for t in times:
         targetaltaz = target.transform_to(AltAz(obstime=t, location=observer))
         alt.append(targetaltaz.alt.to(u.deg).value)
     highest_idx = np.argmax(np.array(alt))
-    return times[highest_idx], target.ra.deg, target.dec.deg #This is the JD of the center of the observing window
+    return times[highest_idx] #, target.ra.deg, target.dec.deg #This is the JD of the center of the observing window
 
 def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_ra, Lfov, obslength):
     '''
@@ -214,6 +317,40 @@ def compute_total_satellite_density(obslat, obslon, shells, target_dec, target_r
         total_nsats += nsats
     return total_nsats
 
+def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_ra, obslength, nstat=100):
+    '''
+    Compute time with possible exposure to RFI given the number of satellites.
+    '''
+
+    # initialise list of ingress time and flythrough times in the effective beam.
+    all_inits, all_ts = [],[]
+    nshells = shells.shape[0]
+    for idx in range(nshells):
+        i = (shells['i'][idx]*u.deg).to(u.rad)
+        Nsat = shells['n'][idx]
+        hsat = shells['h'][idx] * u.km
+        d, lat, lon = compute_d_phi(obslat, hsat, target_dec, target_ra)
+        nsats = compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_ra, Lfov, obslength)
+        wsat = compute_wsat(i, lat, lon, hsat, obslat, obslon, target_dec, target_ra)
+        n_sample = np.random.poisson(nsats.value.squeeze(), size=(nstat,)).squeeze()
+        if n_sample.any()>0:
+            tmp_inits, tmp_ts = draw_passes(n_sample, Lfov, wsat, d, obslength)
+            all_inits.append(tmp_inits)
+            all_ts.append(tmp_ts.value)
+    all_inits = np.concatenate(all_inits, axis=1)
+    all_ts = np.concatenate(all_ts, axis=1)
+    return all_inits, all_ts
+
+def draw_passes(n_samp, Lfov, wsat, d, obslength):
+    ''' Draw the satellite passes for a given number of satellites.'''
+    nstat = n_samp.size
+    nsampmax = n_samp.max()
+    hs = np.random.uniform(low=-Lfov.value/2, high=Lfov.value/2, size=(nstat, nsampmax))
+    inits = np.random.uniform(low=0., high=obslength.value, size=(nstat, nsampmax))
+    ts = 2*np.cos(np.arcsin(hs/(Lfov.value/2)))*(Lfov.to(u.rad)/2)/(wsat/d.to(u.m)*u.rad)
+    for j in range(nstat):
+        ts[j, n_samp[j]:] = -1 *u.s
+    return inits, ts
 
 def run_analytical_ska(obslat, obslon, obstime, obslength, target_dec, target_ra, shells_i, shells_h, shells_n, Lfov, nstat=100):
     location = EarthLocation(lat=obslat, lon=obslon)
@@ -244,17 +381,7 @@ def run_analytical_ska(obslat, obslon, obstime, obslength, target_dec, target_ra
     all_ts = np.concatenate(all_ts, axis=1)
     return all_inits, all_ts
 
-def draw_passes(n_samp, Lfov, wsat, d, obslength):
-    nstat = n_samp.size
-    nsampmax = n_samp.max()
-    hs = np.random.uniform(low=-Lfov.value/2, high=Lfov.value/2, size=(nstat, nsampmax))
-    inits = np.random.uniform(low=0., high=obslength.value, size=(nstat, nsampmax))
-    ts = 2*np.cos(np.arcsin(hs/(Lfov.value/2)))*(Lfov.to(u.rad)/2)/(wsat/d.to(u.m)*u.rad)
-    for j in range(nstat):
-        ts[j, n_samp[j]:] = -1 *u.s
-    return inits, ts
-
-def compute_starlink_fraction(obslength, ntimestep, all_inits, all_ts):
+def compute_exposure_fraction(obslength, ntimestep, all_inits, all_ts):
     timeframe = np.linspace(0,obslength.to(u.s).value,ntimestep)
     nsat_at_t = np.zeros((all_inits.shape[0], ntimestep))
     #print(nsat_at_t.shape, all_inits.shape, timeframe.shape)
