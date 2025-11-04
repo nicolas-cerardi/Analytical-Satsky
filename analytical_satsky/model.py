@@ -243,6 +243,28 @@ def get_highest_time(obslat, obslon, obsheight, target_dec, target_ra, start_day
     highest_idx = np.argmax(np.array(alt))
     return times[highest_idx] #, target.ra.deg, target.dec.deg #This is the JD of the center of the observing window
 
+def correct_for_ra(obslat, obslon, obsheight, target_dec, target_ra, start_day=2460753, nsteps=3600):
+    ''' Correct target RA for LST at observation time.
+
+    Parameters
+    ----------
+    obslat : astropy Quantity
+        Latitude of the observer.
+    obslon : astropy Quantity
+        Longitude of the observer.
+    obsheight : astropy Quantity
+        Height of the observer.
+    target_dec : astropy Quantity
+        Declination of the target.
+    target_ra : astropy Quantity
+        Right ascension of the target.
+    '''
+    obstime = get_highest_time(obslat, obslon, obsheight, target_dec, target_ra, start_day, nsteps)
+    location = EarthLocation(lat=obslat, lon=obslon)
+    LST = obstime.sidereal_time('apparent', longitude=location.lon)
+    corrected_ra = target_ra.to(u.deg) - LST.to(u.deg)
+    return corrected_ra
+    
 def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_ra, Lfov, obslength):
     '''
     Compute the satellite density for a given shell.
@@ -275,7 +297,7 @@ def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, t
     '''
     d, lat, lon = compute_d_phi(obslat, hsat, target_dec, target_ra)
     cosalpha = compute_cosalpha(d, hsat)
-    P_sat = single_sat_density(lat, i, hsat) #
+    #P_sat = single_sat_density(lat, i, hsat) #
     rho_sat = satellite_density(Nsat, lat, i, hsat, d, cosalpha)
     wsat = compute_wsat(i, lat, lon, hsat, obslat, obslon, target_dec, target_ra)
     nsats = np.nan_to_num(compute_nsats(rho_sat, Lfov, wsat/d.to(u.m)*u.rad, obslength))
@@ -321,7 +343,8 @@ def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_ra, o
     '''
     Compute time with possible exposure to RFI given the number of satellites.
     '''
-
+    #target_dec = target_dec.to(u.rad)
+    #target_ra = target_ra.to(u.rad)
     # initialise list of ingress time and flythrough times in the effective beam.
     all_inits, all_ts = [],[]
     nshells = shells.shape[0]
@@ -336,7 +359,7 @@ def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_ra, o
         if n_sample.any()>0:
             tmp_inits, tmp_ts = draw_passes(n_sample, Lfov, wsat, d, obslength)
             all_inits.append(tmp_inits)
-            all_ts.append(tmp_ts.value)
+            all_ts.append(tmp_ts.to(u.s).value)
     all_inits = np.concatenate(all_inits, axis=1)
     all_ts = np.concatenate(all_ts, axis=1)
     return all_inits, all_ts
