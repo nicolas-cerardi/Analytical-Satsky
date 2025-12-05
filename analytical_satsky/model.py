@@ -429,10 +429,34 @@ def compute_total_satellite_density(obslat, obslon, shells, target_dec, target_r
 def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_ra, obslength, nstat=100):
     '''
     Compute time with possible exposure to RFI given the number of satellites.
+
+    Parameters
+    ----------
+    shells : Dataframe
+        dataframe containing all input shells as rows, defining their inclination i, number of sat n and altitude h as columns
+    Lfov : astropy Quantity
+        Field of view of the telescope (in rad).
+    obslat : astropy Quantity
+        Latitude of the observer (in rad).
+    obslon : astropy Quantity
+        Longitude of the observer (in rad).
+    target_dec : astropy Quantity
+        Declination of the target (in rad).
+    target_ra : astropy Quantity
+        Right ascension of the target (in rad).
+    obslength : astropy Quantity
+        Length of the observation (in s).
+    nstat: int
+        number of sampling (for statistical robustness)
+    
+    Returns
+    -------
+    all_inits: array
+        Times of ingress in the effective beam, for each satellite (from all shells)
+    all_ts: array
+        Flythrough times through the effective beam, for each satellite (from all shells)
     '''
-    #target_dec = target_dec.to(u.rad)
-    #target_ra = target_ra.to(u.rad)
-    # initialise list of ingress time and flythrough times in the effective beam.
+    
     all_inits, all_ts = [],[]
     nshells = shells.shape[0]
     for idx in range(nshells):
@@ -452,7 +476,28 @@ def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_ra, o
     return all_inits, all_ts
 
 def draw_passes(n_samp, Lfov, wsat, d, obslength):
-    ''' Draw the satellite passes for a given number of satellites.'''
+    ''' Draw the satellite passes for a given number of satellites, from a given shell.
+    
+    Parameters
+    ----------
+    n_samp: int
+        Number of satellites passing through the beam.
+    Lfov : astropy Quantity
+        Field of view of the telescope (in rad).
+    wsat : astropy Quantity
+        Mean apparent velocities of the satellites as a function of ra, dec.
+    d : astropy Quantity
+        Distance from observer to the shell as a function of the l.o.s. ra,dec
+    obslength : astropy Quantity
+        Length of the observation (in s).
+
+    Returns
+    -------
+    inits: array
+        Times of ingress in the effective beam, for each satellite (in the given shell)
+    ts: array
+        Flythrough times through the effective beam, for each satellite (in the given shell)
+    '''
     nstat = n_samp.size
     nsampmax = n_samp.max()
     hs = np.random.uniform(low=-Lfov.value/2, high=Lfov.value/2, size=(nstat, nsampmax))
@@ -492,9 +537,27 @@ def run_analytical_ska(obslat, obslon, obstime, obslength, target_dec, target_ra
     return all_inits, all_ts
 
 def compute_exposure_fraction(obslength, ntimestep, all_inits, all_ts):
+    ''' Compute the time with exposure to at least 1 satellite in the effective beam
+
+    Parameters
+    ----------
+    obslength : astropy Quantity
+        Length of the observation (in s).
+    ntimestep : int
+        Number of timestep to use within [0, obslength]
+    all_inits: array
+        Times of ingress in the effective beam, for each satellite (from all shells)
+    all_ts: array
+        Flythrough times through the effective beam, for each satellite (from all shells)
+    
+    Returns
+    -------
+    exposure_fraction: array of size (nstat,)
+        Fraction of the time with at least 1 satellite in the effective beam, for each repetition of the model
+    '''
     timeframe = np.linspace(0,obslength.to(u.s).value,ntimestep)
     nsat_at_t = np.zeros((all_inits.shape[0], ntimestep))
-    #print(nsat_at_t.shape, all_inits.shape, timeframe.shape)
+    
     for j in range(all_inits.shape[0]):
         for init, tpass in zip(all_inits[j], all_ts[j]):
             nsat_at_t[j, (timeframe>init)*(timeframe<init+tpass)] += 1
