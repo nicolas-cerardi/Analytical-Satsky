@@ -12,7 +12,7 @@ from astropy.time import Time
 w_earth = 1/86164.098903691 * 2 * np.pi * u.rad / u.s
 
 def single_sat_density(lat, i, hsat):
-    '''equation A.3
+    '''equation A.4
     P(lat, i, hsat) = 1/(2 pi^2 (Re + hsat)^2 (sin^2 i - sin^2 lat)^1/2)
 
     Parameters
@@ -33,15 +33,15 @@ def single_sat_density(lat, i, hsat):
     singsat_density[np.abs(lat)<i] = 1/(2*np.pi**2 * (const.R_earth+hsat)**2 * (np.sin(i)**2-np.sin(lat[np.abs(lat)<i])**2)**.5)
     return singsat_density
 
-def satellite_density(Nsat, lat, i, hsat, d, cosalpha):
-    '''equation 3
-    rho_sat = Nsat * P(lat, i, hsat) * (d^2 A)/(cos alpha), with A=1 here
+def satellite_density(Nsat, latsat, i, hsat, d, cosalpha):
+    '''equation 1
+    rho_sat = Nsat * P(latsat, i, hsat) * (d^2 A)/(cos alpha), with A=1 here
 
     Parameters
     ----------
     Nsat : float
         Number of satellites in the shell.
-    lat : astropy Quantity
+    latsat : astropy Quantity
         Latitude grid (in rad).
     i : astropy Quantity
         Inclination of the orbits in the shell (in rad).
@@ -57,7 +57,7 @@ def satellite_density(Nsat, lat, i, hsat, d, cosalpha):
     sat_density : astropy Quantity
         Satellite density at the given latitudes.
     '''
-    return Nsat*single_sat_density(lat, i, hsat)*d**2/cosalpha #*A
+    return Nsat*single_sat_density(latsat, i, hsat)*d**2/cosalpha #*A
 
 def compute_vdirection(Omega, i, lat, lon):
     ''' equation A.8 to A.11
@@ -143,24 +143,63 @@ def compute_topocentric_v(v, obs_lat, obs_lon):
     v_obs = w_earth*const.R_earth*np.cos(obs_lat.to(u.rad))*np.array([-np.sin(obs_lon.to(u.rad)), np.cos(obs_lon.to(u.rad)), 0])
     return v - v_obs[:,np.newaxis,np.newaxis]/u.rad
 
-def compute_apparent_v(v, target_dec, target_ra):
-    '''equation A.14
+def compute_apparent_v(v_topo, target_dec, target_ra):
+    '''equations A.13 and A.14
+
+    Parameters
+    ----------
+    v_topo : astropy Quantity
+        Topocentric velocity vectors.
+    target_dec : float or array
+        Target declination in degrees.
+    target_ra : float or array
+        Target right ascension in degrees.
+    
+    Returns
+    -------
+    v_perp : astropy Quantity
+        Velocity vectors, perpendicular to the l.o.s.
     '''
     
     OS = np.stack([np.cos(target_dec.to(u.rad))*np.cos(target_ra.to(u.rad)),
                    np.cos(target_dec.to(u.rad))*np.sin(target_ra.to(u.rad)),
                    np.sin(target_dec.to(u.rad))*np.ones((target_ra.shape))])
-    v_dot_OS = np.einsum('ijk,ijk->jk', v, OS)
+    v_dot_OS = np.einsum('ijk,ijk->jk', v_topo, OS)
     
     OS_dot_OS = np.einsum('ijk,ijk->jk', OS, OS)
     
     
     v_los = (v_dot_OS / OS_dot_OS)[None, ...] * OS
-    v_perp = v - v_los
+    v_perp = v_topo - v_los
     return v_perp
 
 def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra):
-    '''equation A.15
+    '''equation A.15 and its dependencies
+
+    Parameters
+    ----------
+    i : astropy Quantity
+        Inclination of the orbits in the shell (in rad).
+    lat : astropy Quantity
+        Latitude grid (in rad).
+    lon : astropy Quantity
+        Longitude grid (in rad).
+    hsat : astropy Quantity
+        Altitude of the shell.
+    obs_lat : astropy Quantity
+        Observer latitude (in rad).
+    obs_lon : astropy Quantity
+        Observer longitude (in rad).
+    target_dec : float or array
+        Target declination in degrees.
+    target_ra : float or array
+        Target right ascension in degrees.
+
+
+    Returns
+    -------
+    mean_app_V : astropy Quantity
+        Mean apparent velocities of the satellites as a function of ra, dec.
     '''
     nra, ndec = target_ra.size, target_dec.size
     target_ra = np.tile(target_ra[:,np.newaxis], (1, ndec))
@@ -176,32 +215,80 @@ def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra):
     mean_app_V = (norm_V_N+norm_V_S)/2.
     return mean_app_V
 
-def compute_d_phi(obs_phi, hsat, target_dec, target_ra):
-    '''equation A.24
+def compute_d_phi(obs_lat, hsat, target_dec, target_ra):
+    '''equation A.1
     d^2 + 2 Re (xos cos(obs_lat) + z sin(obs_lat)) - (hsat^2 + 2 Re hsat) = 0
+
+    Parameters
+    ----------
+    obs_lat : astropy Quantity
+        Observer latitude (in rad).
+    hsat : astropy Quantity
+        Altitude of the shell.
+    target_dec : float or array
+        Target declination in degrees.
+    target_ra : float or array
+        Target right ascension in degrees.
+
+    Returns
+    -------
+    d : astropy Quantity
+        Distance from observer to the shell as a function of the l.o.s. ra,dec
+    lat : astropy Quantity
+        Satellite latitude as a function of the l.o.s. ra,dec
+    lon : astropy Quantity
+        Satellite longitude as a function of the l.o.s. ra,dec
     '''
     target_ra = target_ra[:,np.newaxis]
     target_dec = target_dec[np.newaxis,:]
-    b = 2*const.R_earth*(np.cos(target_dec)*np.cos(target_ra)*np.cos(obs_phi) + np.sin(target_dec)*np.sin(obs_phi))
+    b = 2*const.R_earth*(np.cos(target_dec)*np.cos(target_ra)*np.cos(obs_lat) + np.sin(target_dec)*np.sin(obs_lat))
     c = -(hsat**2+2*hsat*const.R_earth)
     Delta = b**2-4*c #a=1
     r1, r2 = (-b-np.sqrt(Delta))/2, (-b+np.sqrt(Delta))/2.
-    lat = np.arcsin((r2*np.sin(target_dec)+const.R_earth*np.sin(obs_phi))/(const.R_earth+hsat))
+    lat = np.arcsin((r2*np.sin(target_dec)+const.R_earth*np.sin(obs_lat))/(const.R_earth+hsat))
     sintheta = (r2*np.cos(target_dec)*np.sin(target_ra))/(np.cos(lat)*(const.R_earth+hsat))
-    costheta = (r2*np.cos(target_dec)*np.cos(target_ra)+const.R_earth*np.cos(obs_phi))/(np.cos(lat)*(const.R_earth+hsat))
+    costheta = (r2*np.cos(target_dec)*np.cos(target_ra)+const.R_earth*np.cos(obs_lat))/(np.cos(lat)*(const.R_earth+hsat))
     lon = np.arctan2(sintheta, costheta)
     return r2, lat, lon
 
 def compute_cosalpha(d, hsat):
-    '''equation A.25
+    '''equation A.5
     cos alpha = (Rsat^2 + d^2 - Re^2)/(2 d Rsat)
+
+    Parameters
+    ----------
+    d : astropy Quantity
+        Distance from observer to the shell as a function of the l.o.s. ra,dec
+    hsat : astropy Quantity
+        Altitude of the shell.
+
+    Returns
+    -------
+    cosalpha : astropy Quantity
+        Cosine of the impact angle
     '''
     Rsat = const.R_earth+hsat
     return (Rsat**2+d**2-const.R_earth**2)/(2*d*Rsat)
 
 def compute_nsats(rho_sat, Lfov, wsat, texp):
-    '''equation 1
-    Ntrail = rho_sat (pi R^2 + L wsat Tobs)
+    '''equation 2
+    Nshell_obs = rho_sat (pi R^2 + L wsat Tobs)
+
+    Parameters
+    ----------
+    rho_sat : astropy Quantity
+        Satellite density at the given latitudes.
+    Lfov : astropy Quantity
+        Field of view of the telescope (in rad).
+    wsat : astropy Quantity
+        Mean apparent velocities of the satellites as a function of ra, dec.
+    obslength : astropy Quantity
+        Length of the observation (in s).
+
+    Returns
+    -------
+    Nshell_obs : astropy Quantity
+        Number of satellite from the given shell expected during the observation
     '''
     return rho_sat*(np.pi*(Lfov/2)**2 + Lfov*wsat.to(u.deg/u.s)*texp).to(u.rad*u.rad)
 
