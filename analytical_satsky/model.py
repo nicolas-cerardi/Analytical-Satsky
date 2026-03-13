@@ -141,7 +141,7 @@ def compute_topocentric_v(v, obs_lat, obs_lon):
         Topocentric velocity vectors.
     '''
     v_obs = w_earth*const.R_earth*np.cos(obs_lat.to(u.rad))*np.array([-np.sin(obs_lon.to(u.rad)), np.cos(obs_lon.to(u.rad)), 0])
-    return v - v_obs[:,np.newaxis,np.newaxis]/u.rad
+    return v - v_obs[:,np.newaxis,np.newaxis]/u.rad 
 
 def compute_apparent_v(v_topo, target_dec, target_ra):
     '''equations A.13 and A.14
@@ -164,9 +164,9 @@ def compute_apparent_v(v_topo, target_dec, target_ra):
     OS = np.stack([np.cos(target_dec.to(u.rad))*np.cos(target_ra.to(u.rad)),
                    np.cos(target_dec.to(u.rad))*np.sin(target_ra.to(u.rad)),
                    np.sin(target_dec.to(u.rad))*np.ones((target_ra.shape))])
-    v_dot_OS = np.einsum('ijk,ijk->jk', v_topo, OS)
+    v_dot_OS = np.einsum('i...,i...->...', v_topo, OS) #'ijk,ijk->jk'
     
-    OS_dot_OS = np.einsum('ijk,ijk->jk', OS, OS)
+    OS_dot_OS = np.einsum('i...,i...->...', OS, OS)
     
     
     v_los = (v_dot_OS / OS_dot_OS)[None, ...] * OS
@@ -215,7 +215,7 @@ def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra):
     mean_app_V = (norm_V_N+norm_V_S)/2.
     return mean_app_V
 
-def compute_d_phi(obs_lat, hsat, target_dec, target_ra):
+def compute_d_phi(obs_lat, hsat, target_dec, target_ra, gridmode=True):
     '''equation A.1
     d^2 + 2 Re (xos cos(obs_lat) + z sin(obs_lat)) - (hsat^2 + 2 Re hsat) = 0
 
@@ -239,8 +239,9 @@ def compute_d_phi(obs_lat, hsat, target_dec, target_ra):
     lon : astropy Quantity
         Satellite longitude as a function of the l.o.s. ra,dec
     '''
-    target_ra = target_ra[:,np.newaxis]
-    target_dec = target_dec[np.newaxis,:]
+    if gridmode:
+        target_ra = target_ra[:,np.newaxis]
+        target_dec = target_dec[np.newaxis,:]
     b = 2*const.R_earth*(np.cos(target_dec)*np.cos(target_ra)*np.cos(obs_lat) + np.sin(target_dec)*np.sin(obs_lat))
     c = -(hsat**2+2*hsat*const.R_earth)
     Delta = b**2-4*c #a=1
