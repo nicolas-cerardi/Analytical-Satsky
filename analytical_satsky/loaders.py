@@ -20,3 +20,9 @@ def load_table_qianfan():
 
 def load_table_guowang():
     return _load_csv("guowang.csv")
+
+def load_table_starlink_filing1():
+    return _load_csv("starlink_filing1.csv")
+
+def load_table_starlink_filing2():
+    return _load_csv("starlink_filing2.csv")

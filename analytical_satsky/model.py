@@ -173,7 +173,7 @@ def compute_apparent_v(v_topo, target_dec, target_ra):
     v_perp = v_topo - v_los
     return v_perp
 
-def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra):
+def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra, gridmode=True):
     '''equation A.15 and its dependencies
 
     Parameters
@@ -201,9 +201,10 @@ def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra):
     mean_app_V : astropy Quantity
         Mean apparent velocities of the satellites as a function of ra, dec.
     '''
-    nra, ndec = target_ra.size, target_dec.size
-    target_ra = np.tile(target_ra[:,np.newaxis], (1, ndec))
-    target_dec = np.tile(target_dec[np.newaxis,:], (nra, 1))
+    if gridmode:
+        nra, ndec = target_ra.size, target_dec.size
+        target_ra = np.tile(target_ra[:,np.newaxis], (1, ndec))
+        target_dec = np.tile(target_dec[np.newaxis,:], (nra, 1))
     
     V_N, V_S = compute_geocentric_vs(i, lat, lon, hsat)
     topo_V_N = compute_topocentric_v(V_N, obs_lat, obs_lon)
