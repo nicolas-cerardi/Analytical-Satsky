@@ -57,7 +57,8 @@ def satellite_density(Nsat, latsat, i, hsat, d, cosalpha):
     sat_density : astropy Quantity
         Satellite density at the given latitudes.
     '''
-    return Nsat*single_sat_density(latsat, i, hsat)*d**2/cosalpha #*A
+    #print(single_sat_density(latsat, i, hsat).unit, d.unit)
+    return (Nsat*single_sat_density(latsat, i, hsat).to(u.km**-2)*d.to(u.km)**2/cosalpha * (u.rad)**-2).decompose()#*A
 
 def compute_vdirection(Omega, i, lat, lon):
     ''' equation A.8 to A.11
