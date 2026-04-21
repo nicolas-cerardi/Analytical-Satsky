@@ -332,7 +332,7 @@ def get_highest_time(obslat, obslon, obsheight, target_dec, target_ra, start_day
     highest_idx = np.argmax(np.array(alt))
     return times[highest_idx] #, target.ra.deg, target.dec.deg #This is the JD of the center of the observing window
 
-def correct_for_ra(obslat, obslon, obsheight, target_dec, target_ra, start_day=2460753, nsteps=3600):
+def ra_to_lha(obslat, obslon, obsheight, target_dec, target_ra, start_day=2460753, nsteps=3600):
     ''' Correct target RA for LST at observation time.
 
     Parameters
@@ -351,8 +351,8 @@ def correct_for_ra(obslat, obslon, obsheight, target_dec, target_ra, start_day=2
     obstime = get_highest_time(obslat, obslon, obsheight, target_dec, target_ra, start_day, nsteps)
     location = EarthLocation(lat=obslat, lon=obslon)
     LST = obstime.sidereal_time('apparent', longitude=location.lon)
-    corrected_ra = target_ra.to(u.deg) - LST.to(u.deg)
-    return corrected_ra
+    lha = (LST - target_ra).wrap_at(180*u.deg)
+    return lha
     
 def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_ra, Lfov, obslength):
     '''

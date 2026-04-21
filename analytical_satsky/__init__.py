@@ -1,17 +1,18 @@
 """
-Analytical-Satsky: analytical tools to estimate satellite sky occupancy and exposure.
+Analytical-Satsky: analytical tools to estimate satellite sky occupancy in astronomical observations.
 """
 
 from .loaders import (
-    load_table_starlink_march25,
-    load_table_oneweb_march25,
-    load_table_leo,
+    list_constellations,
+    load_constellation,
 )
 
 from .model import (
     compute_total_satellite_density,
-    compute_shell_density,
-    compute_exposed_time,
+    compute_shell_satellite_density,
+    simulate_exposed_time,
+    compute_exposure_fraction,
+    ra_to_lha
 )
 
 from .plot_utils import (
@@ -19,12 +20,13 @@ from .plot_utils import (
 )
 
 __all__ = [
-    "load_table_starlink_march25",
-    "load_table_oneweb_march25",
-    "load_table_leo",
+    "list_constellations",
+    "load_constellation",
     "compute_total_satellite_density",
-    "compute_shell_density",
-    "compute_exposed_time",
+    "compute_shell_satellite_density",
+    "simulate_exposed_time",
+    "ra_to_lha",
+    "compute_exposure_fraction",
     "plot_sky_map",
 ]
 
