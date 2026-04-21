@@ -23,14 +23,13 @@ Simply git clone and pip install locally
 git clone https://github.com/nicolas-cerardi/Analytical-Satsky.git
 cd analytical-satsky 
 pip install -e .
-
 ```
 
 ## Quick start
 
 A minimal working code:
 
-```
+```python
 import astropy.units as u
 from analytical_satsky import compute_total_satellite_density, load_constellation
 
@@ -40,10 +39,10 @@ satellite_dens = compute_total_satellite_density(
     (-30*u.deg).to(u.rad), 
     (116.*u.deg).to(u.rad), 
     shells_df, 
-    (np.array([-30.])*u.deg).to(u.rad)
+    (np.array([-30.])*u.deg).to(u.rad),
     (np.array([110.])*u.deg).to(u.rad), 
-    Lfov=10.*u.deg, 
-    texp=3600*u.s
+    10.*u.deg, 
+    3600*u.s
 )
 
 print(satellite_dens)
@@ -55,6 +54,7 @@ For more see the demo notebooks:
 - Compute satellite occupancy, as a function of target declination, with error bars: [notebooks/compute_satellite_occupancy.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/compute_satellite_occupancy.ipynb)
 
 ## Repository structure
+
 analytical_satsky/
 notebooks/
 
