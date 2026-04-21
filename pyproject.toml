@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "analytical-satsky"
+version = "0.1.0"
+description = "Analytical model of satellite occupancy in astronomical observations"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Nicolas Cerardi", email = "nicolas.cerardi@epfl.ch" }
+]
+keywords = ["radio astronomy", "satellites", "astropy"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Scientific/Engineering :: Astronomy",
+]
+
+dependencies = [
+  "numpy",
+  "scipy",
+  "pandas",
+  "astropy",
+  "skyfield",
+  "matplotlib",
+]
+
+[project.optional-dependencies]
+
+dev = [
+  "pytest",
+  "build",
+  "twine",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["analytical_satsky*"]
+
+[tool.setuptools.package-data]
+analytical_satsky = []
+"analytical_satsky.shells" = ["*.csv"]
