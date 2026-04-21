@@ -26,3 +26,6 @@ def load_table_starlink_filing1():
 
 def load_table_starlink_filing2():
     return _load_csv("starlink_filing2.csv")
+
+def load_table_leo():
+    return _load_csv("leo.csv")
