@@ -6,7 +6,7 @@
 Modelling satellite constellations seen from astronomical observatories
 
 <p align="center">
-  <img src="notebooks/sky_map_skamid.png" alt="Sky map from SKA-Mid" width="500">
+  <img src="notebooks/sky_map_skamid.png" alt="Sky map from SKA-Mid" width="400">
 </p>
 
 ## Overview
