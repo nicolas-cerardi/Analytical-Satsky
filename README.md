@@ -5,6 +5,8 @@
 
 Modelling satellite constellations seen from astronomical observatories
 
+![Sky map from SKA-Mid](notebooks/sky_map_skamid.png)
+
 ## Overview
 
 The number of artificial satellites in low earth orbit is increasing very fast, due to the deployment of large communication constellations, comprising from hundreds to tens of thousands of satellites.
@@ -53,13 +55,14 @@ print(n_satellite_in_obs)
 ```
 
 For more see the demo notebooks:
-- Compute a full sky map of instantaneous sky density: [notebooks/satellite_density_maps.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/satellite_density_maps.ipynb)
+- Compute a full sky map of number of satellite per hour of observation: [notebooks/satellite_density_maps.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/satellite_density_maps.ipynb)
 - Compute satellite occupancy, as a function of target declination, with error bars: [notebooks/compute_satellite_occupancy.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/compute_satellite_occupancy.ipynb)
 
 ## Repository structure
 
-analytical_satsky/
-notebooks/
+- `analytical_satsky/` — Python package containing the analytical model and utilities  
+- `notebooks/` — Tutorials and figure reproduction examples  
+- `tests/` — Unit and smoke tests executed automatically on GitHub  
 
 ## Roadmap
 
@@ -67,9 +70,5 @@ notebooks/
 
 ## Citation
 
-Cerardi, Tolley, di Vruno et al., accepted in Astronomy and Astrophysics, 2026
-
-## License
-MIT
-
+Cerardi, Tolley and di Vruno, Forecasting the occupancy of satellite megaconstellations in SKA observations, accepted in Astronomy and Astrophysics, 2026
 
