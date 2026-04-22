@@ -1,5 +1,8 @@
 # Analytical-Satsky
 
+[![Tests](https://github.com/nicolas-cerardi/Analytical-Satsky/actions/workflows/tests.yml/badge.svg)](https://github.com/nicolas-cerardi/Analytical-Satsky/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/LICENSE)
+
 Modelling satellite constellations seen from astronomical observatories
 
 ## Overview
@@ -21,7 +24,7 @@ Simply git clone and pip install locally
 
 ```
 git clone https://github.com/nicolas-cerardi/Analytical-Satsky.git
-cd analytical-satsky 
+cd Analytical-Satsky 
 pip install -e .
 ```
 

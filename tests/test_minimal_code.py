@@ -3,8 +3,6 @@ import astropy.units as u
 from analytical_satsky import compute_total_satellite_density, load_constellation
 
 def minimal_code(ndec, nra):
-    
-
     shells_df = load_constellation("starlink_filing2")
 
     n_satellite_in_obs = compute_total_satellite_density(
@@ -28,4 +26,9 @@ def test_units():
     ndec, nra = 10, 10
     n_satellite_in_obs = minimal_code(ndec, nra)
     assert n_satellite_in_obs.unit == u.dimensionless_unscaled
+
+def test_positive():
+    ndec, nra = 10, 10
+    n_satellite_in_obs = minimal_code(ndec, nra)
+    assert np.all(n_satellite_in_obs.value >= 0)
 
