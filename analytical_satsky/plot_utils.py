@@ -67,11 +67,12 @@ def plot_sky_map(sky_map, obslat, obslon, target_ra, target_dec, cmap='magma', v
 
     ax.set_ylim(0, 90)
     ax.set_theta_zero_location('N')  # Azimuth 0 at top (North)
-    ax.set_theta_direction(-1)       # Clockwise: N → E → S → W
+    ax.set_theta_direction(1)       # Clockwise: N → E → S → W
     ax.set_yticks([30, 60, 70, 80])
     ax.set_xticks([0, np.pi/2, np.pi, 3*np.pi/2])
+    ax.set_xticklabels(['N', 'E', 'S', 'W'])
 
-    cbar_ax = fig.add_axes([0.95, 0.1, 0.015, 0.8])  # [left, bottom, width, height]
+    cbar_ax = fig.add_axes([0.95, 0.1, 0.04, 0.8])  # [left, bottom, width, height]
     cbar = fig.colorbar(c, cax=cbar_ax, label='nsats / h')
 
     plt.tight_layout()

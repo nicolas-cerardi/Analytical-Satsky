@@ -30,23 +30,23 @@ pip install -e .
 A minimal working code:
 
 ```python
+import numpy as np
 import astropy.units as u
 from analytical_satsky import compute_total_satellite_density, load_constellation
 
 shells_df = load_constellation("starlink_filing2")
 
-satellite_dens = compute_total_satellite_density(
-    (-30*u.deg).to(u.rad), 
-    (116.*u.deg).to(u.rad), 
+n_satellite_in_obs = compute_total_satellite_density(
+    -30*u.deg, 
+    116.*u.deg, 
     shells_df, 
-    (np.array([-30.])*u.deg).to(u.rad),
-    (np.array([110.])*u.deg).to(u.rad), 
+    np.array([-31.])*u.deg,
+    np.array([110.])*u.deg, 
     10.*u.deg, 
     3600*u.s
 )
 
-print(satellite_dens)
-
+print(n_satellite_in_obs)
 ```
 
 For more see the demo notebooks:
