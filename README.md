@@ -39,17 +39,19 @@ A minimal working code:
 ```python
 import numpy as np
 import astropy.units as u
+from astropy.coordinates import EarthLocation
 from analytical_satsky import compute_total_satellite_density, load_constellation
 
 shells_df = load_constellation("starlink_filing2")
+obsloc = EarthLocation.of_site("SKA-Low")
 
 n_satellite_in_obs = compute_total_satellite_density(
-    -30*u.deg, 
-    shells_df, 
-    np.array([-31.])*u.deg,
-    np.array([110.])*u.deg, 
-    10.*u.deg, 
-    3600*u.s
+    obsloc,                    # Observer
+    shells_df,                 # Satellites shells
+    np.array([-31.])*u.deg,    # DEC of pointing
+    np.array([110.])*u.deg,    # RA of pointing
+    10.*u.deg,                 # Effective beam width
+    3600*u.s                   # exposure time
 )
 
 print(n_satellite_in_obs)
