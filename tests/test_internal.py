@@ -6,6 +6,7 @@ This testing file provides test for:
 
 import numpy as np
 import astropy.units as u
+from astropy.coordinates import EarthLocation
 from analytical_satsky import compute_total_satellite_density   
 from analytical_satsky.model import compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats
 import pandas as pd
@@ -18,8 +19,10 @@ def test_zero_density_low_i():
         'i': [10]
     })
 
+    obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
+
     n_satellite_in_obs = compute_total_satellite_density(
-        -30*u.deg, 
+        obsloc,
         shells_df, 
         np.array([-30.])*u.deg,
         np.linspace(100., 120., num=10)*u.deg, 
@@ -36,8 +39,10 @@ def test_zero_density_high_dec():
         'i': [30]
     })
 
+    obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
+
     n_satellite_in_obs = compute_total_satellite_density(
-        -30*u.deg, 
+        obsloc,
         shells_df, 
         np.array([-50.])*u.deg,
         np.linspace(100., 120., num=10)*u.deg, 
@@ -47,7 +52,8 @@ def test_zero_density_high_dec():
     assert np.all(n_satellite_in_obs.value == 0)
 
 def test_unit_d_phi():
-    obslat_rad = (30*u.deg).to(u.rad)
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    obslat_rad = obsloc.lat.to(u.rad)
     hsat_m = 5e5*u.m
     target_dec_rad = (np.array([30])*u.deg).to(u.rad)
     target_lha_rad = (np.array([0])*u.deg).to(u.rad)
@@ -69,7 +75,8 @@ def test_unit_wsat():
     lat = 0*u.rad
     lon = 0*u.rad
     hsat_m = 5e5*u.m
-    obslat_rad = (30*u.deg).to(u.rad)
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    obslat_rad = obsloc.lat.to(u.rad)
     target_dec_rad = (np.array([30])*u.deg).to(u.rad)
     target_lha_rad = (np.array([0])*u.deg).to(u.rad)
 

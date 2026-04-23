@@ -1,12 +1,14 @@
 import numpy as np
 import astropy.units as u
+from astropy.coordinates import EarthLocation
+
 from analytical_satsky import compute_total_satellite_density, load_constellation
 
 def minimal_code(ndec, nra):
     shells_df = load_constellation("starlink_filing2")
-
+    obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
     n_satellite_in_obs = compute_total_satellite_density(
-        -30*u.deg, 
+        obsloc,
         shells_df, 
         np.linspace(-40., -20., num=ndec)*u.deg,
         np.linspace(100., 120., num=nra)*u.deg, 

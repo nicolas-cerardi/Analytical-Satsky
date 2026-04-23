@@ -290,23 +290,19 @@ def compute_nsats(rho_sat, Lfov, wsat, tobs):
     return rho_sat*(np.pi*(Lfov/2)**2 + Lfov*wsat*tobs)
 
 
-def get_highest_time(obslat, obslon, obsheight, target_dec, target_ra, start_day=2460753, nsteps=3600):
+def get_highest_time(obsloc, target_dec, target_ra, start_day=2460753, nsteps=3600):
     """ Find the time when the target is highest in the sky
 
     Parameters
     ----------
-    obslat : float
-        Observer latitude in degrees.
-    obslon : float
-        Observer longitude in degrees.
-    obsheight : float
-        Observer height in meters.
+    obsloc : astropy.coordinates.EarthLocation
+        Location of the observer (ITRS).
     target_dec : float or array
         Target declination in degrees.
     target_ra : float or array
         Target right ascension in degrees.
     start_day : float, optional
-        Start day in Julian Date. Default is 2460753 (March 18, 2025).
+        Observer latitude in degrees. Default is 2460753 (March 18, 2025).
     nsteps : int, optional
         Number of time steps to sample within the observing window. Default is 3600.
     
@@ -317,49 +313,39 @@ def get_highest_time(obslat, obslon, obsheight, target_dec, target_ra, start_day
     """
     end_day = start_day + 1.0
     times = Time(np.linspace(start_day, end_day, nsteps), format='jd', scale='utc')
-    observer = EarthLocation(lat=obslat, lon=obslon, height=obsheight)
     target = SkyCoord(target_ra, target_dec, unit=(u.deg, u.deg))
     alt=[]
     for t in times:
-        targetaltaz = target.transform_to(AltAz(obstime=t, location=observer))
+        targetaltaz = target.transform_to(AltAz(obstime=t, location=obsloc))
         alt.append(targetaltaz.alt.to(u.deg).value)
     highest_idx = np.argmax(np.array(alt))
     return times[highest_idx] #, target.ra.deg, target.dec.deg #This is the JD of the center of the observing window
 
-def ra_to_lha(obslat, obslon, obsheight, target_dec, target_ra, start_day=2460753, nsteps=3600):
+def ra_to_lha(obsloc, target_dec, target_ra, start_day=2460753, nsteps=3600):
     ''' Correct target RA for LST at observation time.
 
     Parameters
     ----------
-    obslat : astropy Quantity
-        Latitude of the observer.
-    obslon : astropy Quantity
-        Longitude of the observer.
-    obsheight : astropy Quantity
-        Height of the observer.
+    obsloc : astropy.coordinates.EarthLocation
+        Location of the observer (ITRS).
     target_dec : astropy Quantity
         Declination of the target.
     target_ra : astropy Quantity
         Right ascension of the target.
     '''
-    obslat_rad = obslat.to(u.rad)
-    obslon_rad = obslon.to(u.rad)
-    obsheight_m = obsheight.to(u.m)
-
-    obstime = get_highest_time(obslat_rad, obslon_rad, obsheight_m, target_dec, target_ra, start_day, nsteps)
-    location = EarthLocation(lat=obslat_rad, lon=obslon_rad)
-    LST = obstime.sidereal_time('apparent', longitude=location.lon)
+    obstime = get_highest_time(obsloc, target_dec, target_ra, start_day, nsteps)
+    LST = obstime.sidereal_time('apparent', longitude=obsloc.lon)
     lha = (LST - target_ra).wrap_at(180*u.deg)
     return lha
     
-def compute_shell_satellite_density(obslat, i, Nsat, hsat, target_dec, target_lha, Lfov, tobs):
+def compute_shell_satellite_density(obsloc, i, Nsat, hsat, target_dec, target_lha, Lfov, tobs):
     '''
     Compute the satellite density for a given shell.
 
     Parameters
     ----------
-    obslat : astropy Quantity
-        Latitude of the observer).
+    obsloc : astropy.coordinates.EarthLocation
+        Location of the observer (ITRS).
     i : astropy Quantity
         Inclination of the shell (in rad).
     Nsat : int
@@ -380,7 +366,7 @@ def compute_shell_satellite_density(obslat, i, Nsat, hsat, target_dec, target_lh
     nsats : astropy Quantity
         Number of satellites expected at the target dec and ra during the observation.
     '''
-    obslat_rad = obslat.to(u.rad)
+    obslat_rad = np.arcsin(obsloc.z/np.sqrt(obsloc.x**2 + obsloc.y**2 + obsloc.z**2))
     i_rad = i.to(u.rad)
     target_dec_rad = target_dec.to(u.rad)
     target_lha_rad = target_lha.to(u.rad)
@@ -395,14 +381,14 @@ def compute_shell_satellite_density(obslat, i, Nsat, hsat, target_dec, target_lh
     nsats = np.nan_to_num(compute_nsats(rho_sat, Lfov_rad, wsat/d*u.rad, tobs))
     return nsats
 
-def compute_total_satellite_density(obslat, shells, target_dec, target_ra, Lfov, tobs):
+def compute_total_satellite_density(obsloc, shells, target_dec, target_ra, Lfov, tobs):
     '''
     Compute the total satellite density for a list of shells.
 
     Parameters
     ----------
-    obslat : astropy Quantity
-        Latitude of the observer (in rad).
+    obsloc : astropy.coordinates.EarthLocation
+        Location of the observer (ITRS).
     shells: pandas DataFrame
         DataFrame containing the shell parameters (inclination in deg, altitude in km, number of satellites).
     target_dec : astropy Quantity
@@ -425,11 +411,11 @@ def compute_total_satellite_density(obslat, shells, target_dec, target_ra, Lfov,
         i = (shells['i'][idx]*u.deg).to(u.rad)
         Nsat = shells['n'][idx]
         hsat = shells['h'][idx] * u.km
-        nsats = compute_shell_satellite_density(obslat, i, Nsat, hsat, target_dec, target_ra, Lfov, tobs)
+        nsats = compute_shell_satellite_density(obsloc, i, Nsat, hsat, target_dec, target_ra, Lfov, tobs)
         total_nsats += nsats
     return total_nsats
 
-def simulate_exposed_time(shells, Lfov, obslat, target_dec, target_lha, tobs, nstat=100):
+def simulate_exposed_time(shells, Lfov, obsloc, target_dec, target_lha, tobs, nstat=100):
     '''
     Compute time with satellite occupancy given the number of satellites.
 
@@ -439,8 +425,8 @@ def simulate_exposed_time(shells, Lfov, obslat, target_dec, target_lha, tobs, ns
         dataframe containing all input shells as rows, defining their inclination i, number of sat n and altitude h as columns
     Lfov : astropy Quantity
         Field of view of the telescope (in deg).
-    obslat : astropy Quantity
-        Latitude of the observer (in deg).
+    obsloc : astropy.coordinates.EarthLocation
+        Location of the observer (ITRS).
     target_dec : astropy Quantity
         Declination of the target (in deg).
     target_lha : astropy Quantity
@@ -460,7 +446,7 @@ def simulate_exposed_time(shells, Lfov, obslat, target_dec, target_lha, tobs, ns
 
     target_dec_rad = target_dec.to(u.rad)
     target_lha_rad = target_lha.to(u.rad)
-    obslat_rad = obslat.to(u.rad)
+    obslat_rad = np.arcsin(obsloc.z/np.sqrt(obsloc.x**2 + obsloc.y**2 + obsloc.z**2))
     Lfov_rad = Lfov.to(u.rad)
 
     all_inits, all_ts = [],[]
@@ -470,7 +456,7 @@ def simulate_exposed_time(shells, Lfov, obslat, target_dec, target_lha, tobs, ns
         Nsat = shells['n'][idx]
         hsat = shells['h'][idx] * u.km
         d, lat, lon = compute_d_phi(obslat_rad, hsat, target_dec_rad, target_lha_rad)
-        nsats = compute_shell_satellite_density(obslat_rad, i_rad, Nsat, hsat, target_dec_rad, target_lha_rad, Lfov_rad, tobs)
+        nsats = compute_shell_satellite_density(obsloc, i_rad, Nsat, hsat, target_dec_rad, target_lha_rad, Lfov_rad, tobs)
         wsat = compute_wsat(i_rad, lat, lon, hsat, obslat_rad, target_dec_rad, target_lha_rad)
         n_sample = np.random.poisson(nsats.value.squeeze(), size=(nstat,)).squeeze()
         if n_sample.any()>0:

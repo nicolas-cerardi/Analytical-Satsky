@@ -5,7 +5,7 @@ from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 
-def plot_sky_map(sky_map, obslat, obslon, target_ra, target_dec, cmap='magma', vmin=10., vmax=10000., return_fig=False):
+def plot_sky_map(sky_map, obsloc, target_ra, target_dec, cmap='magma', vmin=10., vmax=10000., return_fig=False):
     '''
     Plots a sky map in ra-dec coordinates.
 
@@ -13,10 +13,8 @@ def plot_sky_map(sky_map, obslat, obslon, target_ra, target_dec, cmap='magma', v
     ----------
     sky_map : 2D array
         Sky map data to plot (e.g., satellite density).
-    obslat : float
-        Observer latitude in degrees.
-    obslon : float
-        Observer longitude in degrees.
+    obsloc : astropy.coordinates.EarthLocation
+        Location of the observer (ITRS).
     target_ra : array
         Target right ascension grid in degrees.
     target_dec : array
@@ -39,9 +37,8 @@ def plot_sky_map(sky_map, obslat, obslon, target_ra, target_dec, cmap='magma', v
     
     # Get Local Sidereal Time (RA at meridian)
     obs_time = Time('2025-03-18T08:00:00')  # UTC time
-    location = EarthLocation(lat=obslat, lon=obslon)
-    altaz_frame = AltAz(obstime=obs_time, location=location)
-    LST = obs_time.sidereal_time('apparent', longitude=location.lon)
+    altaz_frame = AltAz(obstime=obs_time, location=obsloc)
+    LST = obs_time.sidereal_time('apparent', longitude=obsloc.lon)
     ra_grid, dec_grid = np.meshgrid(target_ra+LST.to(u.rad), target_dec, indexing='ij') #+LST.to(u.rad)
     
     # Convert RA/Dec to Alt/Az
