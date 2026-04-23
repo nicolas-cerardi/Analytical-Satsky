@@ -45,7 +45,6 @@ shells_df = load_constellation("starlink_filing2")
 
 n_satellite_in_obs = compute_total_satellite_density(
     -30*u.deg, 
-    116.*u.deg, 
     shells_df, 
     np.array([-31.])*u.deg,
     np.array([110.])*u.deg, 

@@ -20,7 +20,6 @@ def test_zero_density_low_i():
 
     n_satellite_in_obs = compute_total_satellite_density(
         -30*u.deg, 
-        116.*u.deg, 
         shells_df, 
         np.array([-30.])*u.deg,
         np.linspace(100., 120., num=10)*u.deg, 
@@ -39,7 +38,6 @@ def test_zero_density_high_dec():
 
     n_satellite_in_obs = compute_total_satellite_density(
         -30*u.deg, 
-        116.*u.deg, 
         shells_df, 
         np.array([-50.])*u.deg,
         np.linspace(100., 120., num=10)*u.deg, 
@@ -72,11 +70,10 @@ def test_unit_wsat():
     lon = 0*u.rad
     hsat_m = 5e5*u.m
     obslat_rad = (30*u.deg).to(u.rad)
-    obslon_rad = 0*u.rad
     target_dec_rad = (np.array([30])*u.deg).to(u.rad)
     target_lha_rad = (np.array([0])*u.deg).to(u.rad)
 
-    wsat = compute_wsat(i_rad, lat, lon, hsat_m, obslat_rad, obslon_rad, target_dec_rad, target_lha_rad)
+    wsat = compute_wsat(i_rad, lat, lon, hsat_m, obslat_rad, target_dec_rad, target_lha_rad)
     assert wsat.unit == u.m / u.s
 
 def test_unit_nsats():

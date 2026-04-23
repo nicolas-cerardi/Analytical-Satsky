@@ -7,7 +7,6 @@ def minimal_code(ndec, nra):
 
     n_satellite_in_obs = compute_total_satellite_density(
         -30*u.deg, 
-        116.*u.deg, 
         shells_df, 
         np.linspace(-40., -20., num=ndec)*u.deg,
         np.linspace(100., 120., num=nra)*u.deg, 

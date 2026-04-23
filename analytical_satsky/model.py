@@ -123,8 +123,8 @@ def compute_geocentric_vs(i, lat, lon, hsat):
     NCS_S = compute_vdirection(Omega_S, i, lat, lon)
     return NCS_N*v_norm, NCS_S*v_norm
 
-def compute_topocentric_v(v, obs_lat, obs_lon):
-    '''equation A.12
+def compute_topocentric_v(v, obs_lat):
+    '''equation A.12, with obslon = 0 (rotating frame)
 
     Parameters
     ----------
@@ -132,15 +132,13 @@ def compute_topocentric_v(v, obs_lat, obs_lon):
         Geocentric velocity vectors.
     obs_lat : astropy Quantity
         Observer latitude (in rad).
-    obs_lon : astropy Quantity
-        Observer longitude (in rad).
 
     Returns
     -------
     v_topo : astropy Quantity
         Topocentric velocity vectors.
     '''
-    v_obs = w_earth*const.R_earth*np.cos(obs_lat.to(u.rad))*np.array([-np.sin(obs_lon.to(u.rad)), np.cos(obs_lon.to(u.rad)), 0])
+    v_obs = w_earth*const.R_earth*np.cos(obs_lat.to(u.rad))*np.array([0, 1, 0])
     return v - v_obs[:,np.newaxis,np.newaxis]/u.rad 
 
 def compute_apparent_v(v_topo, target_dec, target_ra):
@@ -173,7 +171,7 @@ def compute_apparent_v(v_topo, target_dec, target_ra):
     v_perp = v_topo - v_los
     return v_perp
 
-def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra, gridmode=True):
+def compute_wsat(i, lat, lon, hsat, obs_lat, target_dec, target_ra, gridmode=True):
     '''equation A.15 and its dependencies
 
     Parameters
@@ -188,13 +186,10 @@ def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra, gri
         Altitude of the shell.
     obs_lat : astropy Quantity
         Observer latitude (in rad).
-    obs_lon : astropy Quantity
-        Observer longitude (in rad).
     target_dec : float or array
         Target declination in degrees.
     target_ra : float or array
         Target right ascension in degrees.
-
 
     Returns
     -------
@@ -207,8 +202,8 @@ def compute_wsat(i, lat, lon, hsat, obs_lat, obs_lon, target_dec, target_ra, gri
         target_dec = np.tile(target_dec[np.newaxis,:], (nra, 1))
     
     V_N, V_S = compute_geocentric_vs(i, lat, lon, hsat)
-    topo_V_N = compute_topocentric_v(V_N, obs_lat, obs_lon)
-    topo_V_S = compute_topocentric_v(V_S, obs_lat, obs_lon)
+    topo_V_N = compute_topocentric_v(V_N, obs_lat)
+    topo_V_S = compute_topocentric_v(V_S, obs_lat)
     app_V_N = compute_apparent_v(topo_V_N, target_dec, target_ra)
     app_V_S = compute_apparent_v(topo_V_S, target_dec, target_ra)
     norm_V_N = np.sqrt(np.einsum('ijk,ijk->jk',app_V_N,app_V_N))
@@ -357,7 +352,7 @@ def ra_to_lha(obslat, obslon, obsheight, target_dec, target_ra, start_day=246075
     lha = (LST - target_ra).wrap_at(180*u.deg)
     return lha
     
-def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_lha, Lfov, tobs):
+def compute_shell_satellite_density(obslat, i, Nsat, hsat, target_dec, target_lha, Lfov, tobs):
     '''
     Compute the satellite density for a given shell.
 
@@ -365,8 +360,6 @@ def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, t
     ----------
     obslat : astropy Quantity
         Latitude of the observer).
-    obslon : astropy Quantity
-        Longitude of the observer.
     i : astropy Quantity
         Inclination of the shell (in rad).
     Nsat : int
@@ -388,7 +381,6 @@ def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, t
         Number of satellites expected at the target dec and ra during the observation.
     '''
     obslat_rad = obslat.to(u.rad)
-    obslon_rad = obslon.to(u.rad)
     i_rad = i.to(u.rad)
     target_dec_rad = target_dec.to(u.rad)
     target_lha_rad = target_lha.to(u.rad)
@@ -399,11 +391,11 @@ def compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, t
     d, lat, lon = compute_d_phi(obslat_rad, hsat_m, target_dec_rad, target_lha_rad)
     cosalpha = compute_cosalpha(d, hsat_m)
     rho_sat = satellite_density(Nsat, lat, i_rad, hsat_m, d, cosalpha)
-    wsat = compute_wsat(i_rad, lat, lon, hsat_m, obslat_rad, obslon_rad, target_dec_rad, target_lha_rad)
+    wsat = compute_wsat(i_rad, lat, lon, hsat_m, obslat_rad, target_dec_rad, target_lha_rad)
     nsats = np.nan_to_num(compute_nsats(rho_sat, Lfov_rad, wsat/d*u.rad, tobs))
     return nsats
 
-def compute_total_satellite_density(obslat, obslon, shells, target_dec, target_ra, Lfov, tobs):
+def compute_total_satellite_density(obslat, shells, target_dec, target_ra, Lfov, tobs):
     '''
     Compute the total satellite density for a list of shells.
 
@@ -411,8 +403,6 @@ def compute_total_satellite_density(obslat, obslon, shells, target_dec, target_r
     ----------
     obslat : astropy Quantity
         Latitude of the observer (in rad).
-    obslon : astropy Quantity
-        Longitude of the observer (in rad).
     shells: pandas DataFrame
         DataFrame containing the shell parameters (inclination in deg, altitude in km, number of satellites).
     target_dec : astropy Quantity
@@ -435,11 +425,11 @@ def compute_total_satellite_density(obslat, obslon, shells, target_dec, target_r
         i = (shells['i'][idx]*u.deg).to(u.rad)
         Nsat = shells['n'][idx]
         hsat = shells['h'][idx] * u.km
-        nsats = compute_shell_satellite_density(obslat, obslon, i, Nsat, hsat, target_dec, target_ra, Lfov, tobs)
+        nsats = compute_shell_satellite_density(obslat, i, Nsat, hsat, target_dec, target_ra, Lfov, tobs)
         total_nsats += nsats
     return total_nsats
 
-def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_lha, tobs, nstat=100):
+def simulate_exposed_time(shells, Lfov, obslat, target_dec, target_lha, tobs, nstat=100):
     '''
     Compute time with satellite occupancy given the number of satellites.
 
@@ -451,8 +441,6 @@ def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_lha, 
         Field of view of the telescope (in deg).
     obslat : astropy Quantity
         Latitude of the observer (in deg).
-    obslon : astropy Quantity
-        Longitude of the observer (in deg).
     target_dec : astropy Quantity
         Declination of the target (in deg).
     target_lha : astropy Quantity
@@ -473,7 +461,6 @@ def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_lha, 
     target_dec_rad = target_dec.to(u.rad)
     target_lha_rad = target_lha.to(u.rad)
     obslat_rad = obslat.to(u.rad)
-    obslon_rad = obslon.to(u.rad)
     Lfov_rad = Lfov.to(u.rad)
 
     all_inits, all_ts = [],[]
@@ -483,8 +470,8 @@ def simulate_exposed_time(shells, Lfov, obslat, obslon, target_dec, target_lha, 
         Nsat = shells['n'][idx]
         hsat = shells['h'][idx] * u.km
         d, lat, lon = compute_d_phi(obslat_rad, hsat, target_dec_rad, target_lha_rad)
-        nsats = compute_shell_satellite_density(obslat_rad, obslon_rad, i_rad, Nsat, hsat, target_dec_rad, target_lha_rad, Lfov_rad, tobs)
-        wsat = compute_wsat(i_rad, lat, lon, hsat, obslat_rad, obslon_rad, target_dec_rad, target_lha_rad)
+        nsats = compute_shell_satellite_density(obslat_rad, i_rad, Nsat, hsat, target_dec_rad, target_lha_rad, Lfov_rad, tobs)
+        wsat = compute_wsat(i_rad, lat, lon, hsat, obslat_rad, target_dec_rad, target_lha_rad)
         n_sample = np.random.poisson(nsats.value.squeeze(), size=(nstat,)).squeeze()
         if n_sample.any()>0:
             tmp_inits, tmp_ts = draw_passes(n_sample, Lfov_rad, wsat, d, tobs)
@@ -528,12 +515,10 @@ def draw_passes(n_samp, Lfov, wsat, d, tobs):
 
 def run_analytical_ska(obslat, obslon, obstime, tobs, target_dec, target_ra, shells_i, shells_h, shells_n, Lfov, nstat=100):
     location = EarthLocation(lat=obslat, lon=obslon)
-    altaz_frame = AltAz(obstime=obstime, location=location)
     LST = obstime.sidereal_time('apparent', longitude=location.lon)
     target_dec = target_dec.to(u.rad)
     target_ra = target_ra.to(u.rad) - LST.to(u.rad)
     all_inits, all_ts = [],[]
-    result=0
     nshells = len(shells_i)
     for idx in range(nshells):
         i = (shells_i[idx]*u.deg).to(u.rad)
@@ -542,7 +527,7 @@ def run_analytical_ska(obslat, obslon, obstime, tobs, target_dec, target_ra, she
         d, lat, lon = compute_d_phi(obslat, hsat, target_dec, target_ra)
         cosalpha = compute_cosalpha(d, hsat)
         rho_sat = satellite_density(Nsat, lat, i, hsat, d, cosalpha)
-        wsat = compute_wsat(i, lat, lon, hsat, obslat, obslon, target_dec, target_ra)
+        wsat = compute_wsat(i, lat, lon, hsat, obslat, target_dec, target_ra)
         
         nsats = np.nan_to_num(compute_nsats(rho_sat, Lfov, wsat/d.to(u.m)*u.rad, tobs))
         n_sample = np.random.poisson(nsats.value.squeeze(), size=(nstat,)).squeeze()
