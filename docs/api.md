@@ -124,24 +124,6 @@ Example output:
 ...
 ```
 
-### Typical workflow
-
-```python
-from analytical_satsky import load_constellation
-from analytical_satsky import compute_total_satellite_density
-
-shells = load_constellation("starlink_march25")
-
-result = compute_total_satellite_density(
-    obsloc=obsloc,
-    shells=shells,
-    target_ra=target_ra,
-    target_dec=target_dec,
-    beam_width=beam_width,
-    exposure_time=exposure_time,
-)
-```
-
 ### Raises
 
 * `ValueError`
@@ -158,11 +140,162 @@ result = compute_total_satellite_density(
 
 ## `compute_total_satellite_density(...)`
 
-*To be documented.*
+```python
+compute_total_satellite_density(
+    obsloc,
+    shells,
+    target_dec,
+    target_ra,
+    Lfov,
+    tobs,
+)
+```
+
+Compute the expected number of satellites crossing the target field of view during an observation, summed over all input orbital shells.
+
+This is the main high-level modelling function of the package. It evaluates each shell independently and adds their contributions.
+
+### Parameters
+
+* `obsloc` (`astropy.coordinates.EarthLocation`)
+  Location of the observer.
+
+* `shells` (`pandas.DataFrame`)
+  Table describing the orbital shells of the constellation.
+
+  Required columns:
+
+| Column | Meaning                           | Unit          |
+| ------ | --------------------------------- | ------------- |
+| `i`    | Orbital inclination               | degrees       |
+| `h`    | Orbital altitude                  | km            |
+| `n`    | Number of satellites in the shell | dimensionless |
+
+* `target_dec` (`astropy.units.Quantity`)
+  Declination of the target. Must be convertible to radians.
+
+* `target_lha` (`astropy.units.Quantity`)
+  Local hour angle of the target, defined in the observer frame. Must be convertible to radians.
+
+* `Lfov` (`astropy.units.Quantity`)
+  Angular diameter of the telescope field of view. Must be convertible to radians.
+
+* `tobs` (`astropy.units.Quantity`)
+  Observation duration. Must be convertible to seconds.
+
+### Returns
+
+* `astropy.units.Quantity`
+  Expected number of satellites crossing the target field of view during the observation, summed over all shells.
+
+### Example
+
+```python
+import astropy.units as u
+from astropy.coordinates import EarthLocation
+from analytical_satsky import load_constellation
+from analytical_satsky import compute_total_satellite_density
+
+obsloc = EarthLocation.of_site("SKA-Mid")
+shells = load_constellation("starlink_filing1")
+
+nsats = compute_total_satellite_density(
+    obsloc=obsloc,
+    shells=shells,
+    target_dec=-20.0 * u.deg,
+    target_ra=0.0 * u.deg,
+    Lfov=1.0 * u.deg,
+    tobs=1.0 * u.hour,
+)
+
+print(nsats)
+```
+
+### Notes
+
+* Shell tables use plain numeric values (`deg`, `km`, counts), not Astropy quantities.
+* For the contribution of a single shell only, use `compute_shell_satellite_density()`.
 
 ## `compute_shell_satellite_density(...)`
 
-*To be documented.*
+```python
+compute_shell_satellite_density(
+    obsloc,
+    i,
+    nsat,
+    hsat,
+    target_dec,
+    target_lha,
+    Lfov,
+    tobs,
+)
+```
+
+Compute the expected number of satellites crossing the target field of view during an observation, for a single orbital shell.
+
+This is a lower-level function than `compute_total_satellite_density()`.
+
+### Parameters
+
+* `obsloc` (`astropy.coordinates.EarthLocation`)
+  Location of the observer.
+
+* `i` (`astropy.units.Quantity`)
+  Orbital inclination of the shell. Must be convertible to radians.
+
+* `nsat` (`float`)
+  Number of satellites in the shell.
+
+* `hsat` (`astropy.units.Quantity`)
+  Altitude of the shell above the Earth surface. Must be convertible to metres.
+
+* `target_dec` (`astropy.units.Quantity`)
+  Declination of the target. Must be convertible to radians.
+
+* `target_lha` (`astropy.units.Quantity`)
+  Local hour angle of the target in the observer frame. Must be convertible to radians.
+
+* `Lfov` (`astropy.units.Quantity`)
+  Angular diameter of the telescope field of view. Must be convertible to radians.
+
+* `tobs` (`astropy.units.Quantity`)
+  Observation duration. Must be convertible to seconds.
+
+### Returns
+
+* `astropy.units.Quantity`
+  Expected number of satellites crossing the target field of view during the observation.
+
+### Example
+
+```python
+import astropy.units as u
+from astropy.coordinates import EarthLocation
+from analytical_satsky import compute_shell_satellite_density
+
+obsloc = EarthLocation.of_site("SKA-Mid")
+
+nsats = compute_shell_satellite_density(
+    obsloc=obsloc,
+    i=53.0 * u.deg,
+    nsat=1584,
+    hsat=550.0 * u.km,
+    target_dec=30.0 * u.deg,
+    target_lha=0.0 * u.deg,
+    Lfov=5.0 * u.deg,
+    tobs=1.0 * u.hour,
+)
+
+print(nsats)
+```
+
+### Notes
+
+* This function evaluates one circular orbital shell only.
+* To model a full constellation made of several shells, use `compute_total_satellite_density()`.
+* `target_lha` is the local hour angle of the target, not its right ascension.
+* The returned value is an expected number of satellites, not an integer count from a simulation.
+
 
 ## `simulate_exposed_time(...)`
 

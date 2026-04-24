@@ -8,6 +8,8 @@ import astropy.units as u
 import astropy.constants as const
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy.time import Time
+from astropy.units import Quantity
+import pandas as pd
 
 w_earth = 1/86164.098903691 * 2 * np.pi * u.rad / u.s
 
@@ -337,35 +339,51 @@ def ra_to_lha(obsloc, target_dec, target_ra, start_day=2460753, nsteps=3600):
     LST = obstime.sidereal_time('apparent', longitude=obsloc.lon)
     lha = (LST - target_ra).wrap_at(180*u.deg)
     return lha
-    
-def compute_shell_satellite_density(obsloc, i, Nsat, hsat, target_dec, target_lha, Lfov, tobs):
-    '''
-    Compute the satellite density for a given shell.
+
+def compute_shell_satellite_density(
+    obsloc: EarthLocation,
+    i: Quantity,
+    nsat: float,
+    hsat: Quantity,
+    target_dec: Quantity,
+    target_lha: Quantity,
+    Lfov: Quantity,
+    tobs: Quantity,
+) -> Quantity:
+    """
+    Compute the expected number of satellites crossing the target field of view
+    during an observation, for a single orbital shell.
 
     Parameters
     ----------
     obsloc : astropy.coordinates.EarthLocation
-        Location of the observer (ITRS).
-    i : astropy Quantity
-        Inclination of the shell (in rad).
-    Nsat : int
+        Location of the observer.
+    i : astropy.units.Quantity
+        Orbital inclination of the shell. Must be convertible to radians.
+    nsat : float
         Number of satellites in the shell.
-    hsat : astropy Quantity
-        Altitude of the shell (in km).
-    target_dec : astropy Quantity
-        Declination of the target (in rad).
-    target_lha : astropy Quantity
-        Local hour angle of the target (in rad).
-    Lfov : astropy Quantity
-        Field of view of the telescope (in rad).
-    tobs : astropy Quantity
-        Length of the observation (in s).
+    hsat : astropy.units.Quantity
+        Altitude of the shell above the Earth surface. Must be convertible to metres.
+    target_dec : astropy.units.Quantity
+        Declination of the target. Must be convertible to radians.
+    target_lha : astropy.units.Quantity
+        Local hour angle of the target, defined in the observer frame. Must be
+        convertible to radians.
+    Lfov : astropy.units.Quantity
+        Angular diameter of the telescope field of view. Must be convertible to radians.
+    tobs : astropy.units.Quantity
+        Observation duration. Must be convertible to seconds.
 
     Returns
     -------
-    nsats : astropy Quantity
-        Number of satellites expected at the target dec and ra during the observation.
-    '''
+    astropy.units.Quantity
+        Expected number of satellites crossing the target field of view during the
+        observation.
+
+    Notes
+    -----
+    This function evaluates the contribution of a single circular orbital shell.
+    """
     obslat_rad = np.arcsin(obsloc.z/np.sqrt(obsloc.x**2 + obsloc.y**2 + obsloc.z**2))
     i_rad = i.to(u.rad)
     target_dec_rad = target_dec.to(u.rad)
@@ -376,42 +394,57 @@ def compute_shell_satellite_density(obsloc, i, Nsat, hsat, target_dec, target_lh
 
     d, lat, lon = compute_d_phi(obslat_rad, hsat_m, target_dec_rad, target_lha_rad)
     cosalpha = compute_cosalpha(d, hsat_m)
-    rho_sat = satellite_density(Nsat, lat, i_rad, hsat_m, d, cosalpha)
+    rho_sat = satellite_density(nsat, lat, i_rad, hsat_m, d, cosalpha)
     wsat = compute_wsat(i_rad, lat, lon, hsat_m, obslat_rad, target_dec_rad, target_lha_rad)
-    nsats = np.nan_to_num(compute_nsats(rho_sat, Lfov_rad, wsat/d*u.rad, tobs))
-    return nsats
+    nsats_obs = np.nan_to_num(compute_nsats(rho_sat, Lfov_rad, wsat/d*u.rad, tobs))
+    return nsats_obs
 
-def compute_total_satellite_density(obsloc, shells, target_dec, target_ra, Lfov, tobs):
-    '''
-    Compute the total satellite density for a list of shells.
+def compute_total_satellite_density(
+    obsloc: EarthLocation,
+    shells: pd.DataFrame,
+    target_dec: Quantity,
+    target_lha: Quantity,
+    Lfov: Quantity,
+    tobs: Quantity,
+) -> Quantity:
+    """
+    Compute the expected number of satellites crossing the target field of view
+    during an observation, summed over all input orbital shells.
 
     Parameters
     ----------
     obsloc : astropy.coordinates.EarthLocation
-        Location of the observer (ITRS).
-    shells: pandas DataFrame
-        DataFrame containing the shell parameters (inclination in deg, altitude in km, number of satellites).
-    target_dec : astropy Quantity
-        Declination of the target (in rad).
-    target_ra : astropy Quantity
-        Right ascension of the target (in rad).
-    Lfov : astropy Quantity
-        Field of view of the telescope (in rad).
-    tobs : astropy Quantity
-        Length of the observation (in s).
+        Location of the observer.
+    shells : pandas.DataFrame
+        Table describing the orbital shells of the constellation.
+        Required columns are:
+        - ``i`` : inclination in degrees
+        - ``h`` : altitude in kilometres
+        - ``n`` : number of satellites in the shell
+    target_dec : astropy.units.Quantity
+        Declination of the target. Must be convertible to radians.
+    target_lha : astropy.units.Quantity
+        Local hour angle of the target, defined in the observer frame. Must be
+        convertible to radians.
+    Lfov : astropy.units.Quantity
+        Angular diameter of the telescope field of view. Must be convertible
+        to radians.
+    tobs : astropy.units.Quantity
+        Observation duration. Must be convertible to seconds.
 
     Returns
     -------
-    total_nsats : astropy Quantity
-        Total number of satellites expected at the target dec and ra during the observation.
-    '''
+    astropy.units.Quantity
+        Expected number of satellites crossing the target field of view during
+        the observation, summed over all shells.
+    """
     total_nsats = 0
     nshells = shells.shape[0]
     for idx in range(nshells):
         i = (shells['i'][idx]*u.deg).to(u.rad)
         Nsat = shells['n'][idx]
         hsat = shells['h'][idx] * u.km
-        nsats = compute_shell_satellite_density(obsloc, i, Nsat, hsat, target_dec, target_ra, Lfov, tobs)
+        nsats = compute_shell_satellite_density(obsloc, i, Nsat, hsat, target_dec, target_lha, Lfov, tobs)
         total_nsats += nsats
     return total_nsats
 

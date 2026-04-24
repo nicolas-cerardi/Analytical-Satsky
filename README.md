@@ -14,7 +14,7 @@ Modelling satellite constellations seen from astronomical observatories
 The number of artificial satellites in low earth orbit is increasing very fast, due to the deployment of large communication constellations, comprising from hundreds to tens of thousands of satellites.
 This already has in impact on astronomical observations, as optical and radio telescopes respectively see more frequent trails and radio frequency interferences left by these satellites. Still, this is only a glimpse of what will happen in the next decade, when the number of satellites could be multiplied by ten.
 
-Predicting the impact on science from these satellites is a difficult task, and requires to simulate the trajectories of up to 100,000 satellite. Instead of this discrete description of each individual satellite, this package implements an analytical model for predicting the number of satellites, as presented in [Bassa et al. 2022](https://www.aanda.org/articles/aa/abs/2022/01/aa42101-21/aa42101-21.html). It is here adapted to radio telescopes, providing dedicated features
+Predicting the impact on science from these satellites is a difficult task, and requires to simulate the trajectories of up to 100,000 satellite. Instead of this discrete description of each individual satellite, this package implements an analytical model for predicting the number of satellites, as presented in [Bassa et al. 2022](https://www.aanda.org/articles/aa/abs/2022/01/aa42101-21/aa42101-21.html). It is here adapted to radio telescopes, providing dedicated features.
 
 ## Features
 
@@ -69,7 +69,7 @@ And the documentation (in progress):
 
 - `analytical_satsky/` — Python package containing the analytical model and utilities  
 - `notebooks/` — Tutorials and figure reproduction examples  
-- `tests/` — Unit and smoke tests executed automatically on GitHub 
+- `tests/` — Unit and smoke tests executed automatically
 - `docs/` — Documentation  
 
 ## Roadmap
