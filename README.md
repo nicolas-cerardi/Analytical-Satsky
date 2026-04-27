@@ -2,6 +2,7 @@
 
 [![Tests](https://github.com/nicolas-cerardi/Analytical-Satsky/actions/workflows/tests.yml/badge.svg)](https://github.com/nicolas-cerardi/Analytical-Satsky/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/LICENSE)
+[![astro-ph.IM](https://img.shields.io/badge/astro--ph.IM-arXiv%3A2604.22694-B31B1B.svg)](https://arxiv.org/abs/2604.22694)
 
 Modelling satellite constellations seen from astronomical observatories
 
@@ -78,5 +79,19 @@ And the documentation (in progress):
 
 ## Citation
 
-Cerardi, Tolley and di Vruno, Forecasting the occupancy of satellite megaconstellations in SKA observations, accepted in Astronomy and Astrophysics, 2026
+If you reuse this workd in an academic work, please cite the accompanying paper:
 
+* Cerardi, N. Tolley, E. and di Vruno, F., Forecasting the occupancy of satellite megaconstellations in SKA observations, Letter to the Editor, accepted in Astronomy and Astrophysics, 2026
+
+```
+@article{Cerardi_2026,
+   title={Forecasting the occupancy of satellite megaconstellations in SKA observations},
+   ISSN={1432-0746},
+   url={http://dx.doi.org/10.1051/0004-6361/202558309},
+   DOI={10.1051/0004-6361/202558309},
+   journal={Astronomy &amp; Astrophysics},
+   publisher={EDP Sciences},
+   author={Cerardi, N. and Tolley, E. and di Vruno, F.},
+   year={2026},
+   month=Apr }
+```
