@@ -79,7 +79,7 @@ And the documentation (in progress):
 
 ## Citation
 
-If you reuse this workd in an academic work, please cite the accompanying paper:
+If you reuse this code in an academic work, please cite the accompanying paper:
 
 * Cerardi, N. Tolley, E. and di Vruno, F., Forecasting the occupancy of satellite megaconstellations in SKA observations, Letter to the Editor, accepted in Astronomy and Astrophysics, 2026
 
