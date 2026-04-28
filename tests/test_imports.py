@@ -7,7 +7,6 @@ def test_package_imports():
         compute_shell_satellite_density,
         simulate_exposed_time,
         compute_exposure_fraction,
-        ra_to_lha,
         plot_sky_map,
     )
     
