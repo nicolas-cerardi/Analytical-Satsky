@@ -78,20 +78,24 @@ Example output:
 * The returned names depend on the installed package version.
 * Use `load_constellation(name)` to load one of these datasets as a `pandas.DataFrame`.
 
-## `load_constellation(name)`
+## `load_constellation(*names)`
 
 ```python
-load_constellation(name: str) -> pandas.DataFrame
+load_constellation(*names: str) -> pandas.DataFrame
 ```
 
-Load a predefined satellite constellation table bundled with the package.
+Load one or several predefined satellite constellation tables bundled with the package.
 
-The returned object is a `pandas.DataFrame` where each row represents one orbital shell of the constellation.
+The returned object is a `pandas.DataFrame` where each row represents one orbital shell of a constellation.
+
+If several names are provided, the corresponding tables are concatenated in the order of the input names.
 
 ### Parameters
 
-* `name` (`str`)
-  Name of the constellation to load.
+* `*names` (`str`)
+  One or several constellation names to load.
+
+Names are case-insensitive.
 
 Use `list_constellations()` to see all available built-in options.
 
@@ -106,35 +110,33 @@ Use `list_constellations()` to see all available built-in options.
 | `h`    | Orbital altitude                  | km            |
 | `n`    | Number of satellites in the shell | dimensionless |
 
-### Example
+### Examples
+
+Load a single constellation:
 
 ```python
 from analytical_satsky import load_constellation
 
 shells = load_constellation("oneweb")
-print(shells.head())
 ```
 
-Example output:
+Load several constellations and combine them:
 
 ```python
-      i      h      n
-0  87.9  1200.0   720
-1  40.0  1200.0   648
-...
+shells = load_constellation("leo", "qianfan", "oneweb")
 ```
 
 ### Raises
 
 * `ValueError`
-  If `name` does not match an available packaged constellation.
+  If no name is provided, or if one of the input names does not match an available packaged constellation.
 
 ### Notes
 
-* Use `list_constellations()` to discover valid names.
-* The exact available constellations may evolve between package versions.
+* Use `list_constellations()` to show valid names.
 * Returned values are plain numeric columns (not Astropy quantities).
 * Users may also create custom constellation tables manually using a compatible `pandas.DataFrame`.
+* When several names are given, rows are appended in the same order as the input arguments.
 
 ---
 
@@ -296,12 +298,7 @@ print(nsats)
 * `target_lha` is the local hour angle of the target, not its right ascension.
 * The returned value is an expected number of satellites, not an integer count from a simulation.
 
-
 ## `simulate_exposed_time(...)`
-
-*To be documented.*
-
-## `ra_to_lha(...)`
 
 *To be documented.*
 

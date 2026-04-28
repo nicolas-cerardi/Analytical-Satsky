@@ -12,7 +12,6 @@ from .model import (
     compute_shell_satellite_density,
     simulate_exposed_time,
     compute_exposure_fraction,
-    ra_to_lha
 )
 
 from .plot_utils import (
@@ -25,7 +24,6 @@ __all__ = [
     "compute_total_satellite_density",
     "compute_shell_satellite_density",
     "simulate_exposed_time",
-    "ra_to_lha",
     "compute_exposure_fraction",
     "plot_sky_map",
 ]
