@@ -448,34 +448,66 @@ def compute_total_satellite_density(
         total_nsats += nsats
     return total_nsats
 
-def simulate_exposed_time(shells, Lfov, obsloc, target_dec, target_lha, tobs, nstat=100):
-    '''
-    Compute time with satellite occupancy given the number of satellites.
+def simulate_exposed_time(
+    shells: pd.DataFrame,
+    Lfov: Quantity,
+    obsloc: EarthLocation,
+    target_dec: Quantity,
+    target_lha: Quantity,
+    tobs: Quantity,
+    nstat: int = 100,
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Simulate satellite ingress times and fly-through durations for a given
+    observation.
 
     Parameters
     ----------
-    shells : Dataframe
-        dataframe containing all input shells as rows, defining their inclination i, number of sat n and altitude h as columns
-    Lfov : astropy Quantity
-        Field of view of the telescope (in deg).
+    shells : pandas.DataFrame
+        Table describing the orbital shells of the constellation.
+
+        Required columns are:
+
+        - ``i`` : inclination in degrees
+        - ``h`` : altitude in kilometres
+        - ``n`` : number of satellites in the shell
+
+    Lfov : astropy.units.Quantity
+        Angular diameter of the telescope field of view. Must be convertible to
+        radians.
+
     obsloc : astropy.coordinates.EarthLocation
-        Location of the observer (ITRS).
-    target_dec : astropy Quantity
-        Declination of the target (in deg).
-    target_lha : astropy Quantity
-        Local hour angle of the target (in deg).
-    tobs : astropy Quantity
-        Length of the observation (in s).
-    nstat: int
-        number of sampling (for statistical robustness)
-    
+        Location of the observer.
+
+    target_dec : astropy.units.Quantity
+        Declination of the target. Must be convertible to radians.
+
+    target_lha : astropy.units.Quantity
+        Local hour angle of the target. Must be convertible to radians.
+
+    tobs : astropy.units.Quantity
+        Observation duration. Must be convertible to seconds.
+
+    nstat : int, optional
+        Number of random realisations used for the statistical sampling.
+        Default is 100.
+
     Returns
     -------
-    all_inits: array
-        Times of ingress in the effective beam, for each satellite (from all shells)
-    all_ts: array
-        Flythrough times through the effective beam, for each satellite (from all shells)
-    '''
+    tuple[numpy.ndarray, numpy.ndarray]
+        Two lists containing:
+
+        - ``all_inits`` : ingress times into the effective beam, for all sampled
+          satellites from all shells.
+        - ``all_ts`` : fly-through durations across the effective beam, for all
+          sampled satellites from all shells.
+
+    Notes
+    -----
+    This function performs a statistical simulation of satellite crossings based
+    on the expected occupancy of each shell. It returns sampled event times and
+    durations, not a deterministic satellite catalogue.
+    """
 
     target_dec_rad = target_dec.to(u.rad)
     target_lha_rad = target_lha.to(u.rad)
@@ -558,29 +590,48 @@ def run_analytical_ska(obslat, obslon, obstime, tobs, target_dec, target_ra, she
     all_ts = np.concatenate(all_ts, axis=1)
     return all_inits, all_ts
 
-def compute_exposure_fraction(tobs, ntimestep, all_inits, all_ts):
-    ''' Compute the time with exposure to at least 1 satellite in the effective beam
+def compute_exposure_fraction(
+    tobs: Quantity,
+    ntimestep: int,
+    all_inits: np.ndarray,
+    all_ts: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute the fraction of observing time during which at least one satellite
+    is present in the effective beam.
 
     Parameters
     ----------
-    tobs : astropy Quantity
-        Length of the observation (in s).
+    tobs : astropy.units.Quantity
+        Observation duration. Must be convertible to seconds.
     ntimestep : int
-        Number of timestep to use within [0, tobs]
-    all_inits: array
-        Times of ingress in the effective beam, for each satellite (from all shells)
-    all_ts: array
-        Flythrough times through the effective beam, for each satellite (from all shells)
-    
+        Number of time samples used to discretize the interval ``[0, tobs]``.
+    all_inits : numpy.ndarray
+        Ingress times into the effective beam for each statistical realisation.
+        Expected shape is ``(nstat, nevents)``, where each row contains the
+        ingress times for one realisation. Values are assumed to be in seconds.
+    all_ts : numpy.ndarray
+        Fly-through durations across the effective beam for each statistical
+        realisation. Must have the same shape as ``all_inits``. Values are
+        assumed to be in seconds.
+
     Returns
     -------
-    exposure_fraction: array of size (nstat,)
-        Fraction of the time with at least 1 satellite in the effective beam, for each repetition of the model
-    '''
+    numpy.ndarray
+        Exposure fraction for each statistical realisation. The returned array
+        has shape ``(nstat,)``.
+
+    Notes
+    -----
+    The function estimates the exposure fraction by discretizing the observation
+    into ``ntimestep`` samples and checking, for each realisation, whether at
+    least one satellite is present in the effective beam at each time sample.
+    """
+    
     timeframe = np.linspace(0,tobs.to(u.s).value,ntimestep)
     nsat_at_t = np.zeros((all_inits.shape[0], ntimestep))
     
     for j in range(all_inits.shape[0]):
         for init, tpass in zip(all_inits[j], all_ts[j]):
-            nsat_at_t[j, (timeframe>init)*(timeframe<init+tpass)] += 1
+            nsat_at_t[j, (timeframe>init)&(timeframe<init+tpass)] += 1
     return np.mean(nsat_at_t>=1, axis=1)

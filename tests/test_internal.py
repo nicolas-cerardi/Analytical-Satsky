@@ -7,7 +7,7 @@ This testing file provides test for:
 import numpy as np
 import astropy.units as u
 from astropy.coordinates import EarthLocation
-from analytical_satsky import compute_total_satellite_density   
+from analytical_satsky import compute_total_satellite_density, simulate_exposed_time, compute_exposure_fraction
 from analytical_satsky.model import compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats
 import pandas as pd
 
@@ -92,5 +92,21 @@ def test_unit_nsats():
 
     nsats = compute_nsats(rho_sat, Lfov_rad, wsat/d*u.rad, tobs)
     assert nsats.unit == u.dimensionless_unscaled
+
+def test_exposure_fraction():
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    shells_df = pd.DataFrame({
+        'n': [1000],
+        'h': [500],
+        'i': [35]
+    })
+    target_dec = np.array([30.])*u.deg
+    target_lha = np.array([0.])*u.deg
+    Lfov = 10.*u.deg
+    texp = 3600*u.s
+
+    all_inits, all_ts = simulate_exposed_time(shells_df, Lfov, obsloc, target_dec, target_lha, texp)
+    frac = compute_exposure_fraction(texp, 3600,all_inits, all_ts)
+    
 
 

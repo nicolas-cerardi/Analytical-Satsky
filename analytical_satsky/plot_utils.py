@@ -1,55 +1,80 @@
+from typing import Optional
+
 import numpy as np
 from astropy.time import Time
 import astropy.units as u
+from astropy.units import Quantity
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.axes import Axes
 
-def plot_sky_map(sky_map, obsloc, target_ra, target_dec, cmap='magma', vmin=10., vmax=10000., return_fig=False):
-    '''
-    Plots a sky map in ra-dec coordinates.
+
+def plot_sky_map(
+    sky_map: Quantity,
+    obsloc: EarthLocation,
+    target_lha: Quantity,
+    target_dec: Quantity,
+    cmap: str = "magma",
+    vmin: float = 10.0,
+    vmax: float = 10000.0,
+    return_fig: bool = False,
+) -> Optional[tuple[Figure, Axes]]:
+    """
+    Plot a sky map in local horizon coordinates.
+
+    The input map is defined on a local hour angle / declination grid and is
+    projected to altitude / azimuth coordinates for the given observatory.
+    Points below the horizon are masked.
 
     Parameters
     ----------
-    sky_map : 2D array
-        Sky map data to plot (e.g., satellite density).
+    sky_map : astropy.units.Quantity
+        Two-dimensional sky map to plot. Must have the same shape as the grid
+        defined by ``target_lha`` and ``target_dec``.
     obsloc : astropy.coordinates.EarthLocation
-        Location of the observer (ITRS).
-    target_ra : array
-        Target right ascension grid in degrees.
-    target_dec : array
-        Target declination grid in degrees.
+        Location of the observer.
+    target_lha : astropy.units.Quantity
+        One-dimensional local hour angle grid. Must be convertible to radians.
+    target_dec : astropy.units.Quantity
+        One-dimensional declination grid. Must be convertible to radians.
     cmap : str, optional
-        Colormap to use for the plot. Default is 'magma'.
+        Matplotlib colormap used for the plot. Default is ``"magma"``.
     vmin : float, optional
-        Minimum value for color scale. Default is 10.0.
+        Minimum value of the logarithmic color scale. Default is 10.0.
     vmax : float, optional
-        Maximum value for color scale. Default is 10000.0.
+        Maximum value of the logarithmic color scale. Default is 10000.0.
     return_fig : bool, optional
-        If True, returns the figure and axis objects. Default is False.
-    
+        If True, return the Matplotlib figure and axes. Default is False.
+
     Returns
     -------
-    fig, ax : matplotlib Figure and Axes objects (if return_fig is True)
-        The figure and axis of the plot.
-    '''
+    tuple[matplotlib.figure.Figure, matplotlib.axes.Axes] or None
+        Figure and polar axes if ``return_fig`` is True, otherwise None.
+
+    Notes
+    -----
+    The color scale is logarithmic. Therefore, plotted values should be
+    strictly positive after masking.
+    """
    
     
     # Get Local Sidereal Time (RA at meridian)
-    obs_time = Time('2025-03-18T08:00:00')  # UTC time
+    obs_time = Time('2026-01-01T00:00:00')  # UTC time #2025-03-18T08:00:00 #2026-01-01T00:00:00
     altaz_frame = AltAz(obstime=obs_time, location=obsloc)
     LST = obs_time.sidereal_time('apparent', longitude=obsloc.lon)
-    ra_grid, dec_grid = np.meshgrid(target_ra+LST.to(u.rad), target_dec, indexing='ij') #+LST.to(u.rad)
+    lha_grid, dec_grid = np.meshgrid(target_lha+LST.to(u.rad), target_dec, indexing='ij')
     
-    # Convert RA/Dec to Alt/Az
-    sky_coords = SkyCoord(ra=ra_grid, dec=dec_grid, frame='icrs') #*u.deg
+    # Convert LHA/Dec to Alt/Az
+    sky_coords = SkyCoord(ra=lha_grid, dec=dec_grid, frame='icrs')
     altaz_coords = sky_coords.transform_to(altaz_frame)
 
     alt = altaz_coords.alt.deg
     az = altaz_coords.az.deg
 
     # Mask points below the horizon
-    mask = alt < 0 #dec_grid<0 #
+    mask = alt < 0
     plot_data = np.copy(sky_map)
     plot_data[mask] = np.nan
 
@@ -60,7 +85,7 @@ def plot_sky_map(sky_map, obsloc, target_ra, target_dec, cmap='magma', vmin=10.,
 
     fig = plt.figure(figsize=(4.5, 4))
     ax = fig.add_subplot(111, polar=True)
-    c = ax.pcolormesh(theta, r, plot_data.value, shading='auto', cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax)) #vmin=0.04, vmax=10000
+    c = ax.pcolormesh(theta, r, plot_data.value, shading='auto', cmap=cmap, norm=LogNorm(vmin=vmin, vmax=vmax))
 
     ax.set_ylim(0, 90)
     ax.set_theta_zero_location('N')  # Azimuth 0 at top (North)
