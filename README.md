@@ -19,15 +19,15 @@ Predicting the impact on science from these satellites is a difficult task, and 
 
 ## Features
 
- - Load predefined satellite shell tables from the major upcoming constellations
- - Compute sky maps of the instantaneous satellite density, from a specific observatory
- - Predict the number of satellites entering the field of view for a given observation
+- Load predefined satellite shell tables from the major upcoming constellations
+- Compute sky maps of the instantaneous satellite density, from a specific observatory
+- Predict the number of satellites entering the field of view for a given observation
 
 ## Installation
 
 Simply git clone and pip install locally
 
-```
+```bash
 git clone https://github.com/nicolas-cerardi/Analytical-Satsky.git
 cd Analytical-Satsky 
 pip install -e .
@@ -59,10 +59,12 @@ print(n_satellite_in_obs)
 ```
 
 For more, see the demo notebooks:
+
 - Compute a full sky map of number of satellite per hour of observation: [notebooks/satellite_density_maps.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/satellite_density_maps.ipynb)
 - Compute satellite occupancy, as a function of target declination, with error bars: [notebooks/compute_satellite_occupancy.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/compute_satellite_occupancy.ipynb)
 
 And the documentation (in progress):
+
 - [API reference](docs/api.md)
 - [Constellations](docs/constellations.md)
 
@@ -75,15 +77,15 @@ And the documentation (in progress):
 
 ## Roadmap
 
- - In development: sampling realistic satellite trajectories and computing an integral model.
+- In development: sampling realistic satellite trajectories and computing an integral model.
 
 ## Citation
 
 If you reuse this code in an academic work, please cite the accompanying paper:
 
-* Cerardi, N. Tolley, E. and di Vruno, F., Forecasting the occupancy of satellite megaconstellations in SKA observations, Letter to the Editor, accepted in Astronomy and Astrophysics, 2026
+- Cerardi, N. Tolley, E. and di Vruno, F., Forecasting the occupancy of satellite megaconstellations in SKA observations, Letter to the Editor, accepted in Astronomy and Astrophysics, 2026
 
-```
+```bibtex
 @article{Cerardi_2026,
    title={Forecasting the occupancy of satellite megaconstellations in SKA observations},
    ISSN={1432-0746},

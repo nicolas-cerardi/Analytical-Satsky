@@ -4,3 +4,4 @@
 
 - [API Reference](api.md)
 - [Constellations](constellations.md)
+- [Model discussion](model.md)
