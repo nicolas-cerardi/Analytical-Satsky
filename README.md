@@ -22,6 +22,7 @@ Predicting the impact on science from these satellites is a difficult task, and 
 - Load predefined satellite shell tables from the major upcoming constellations
 - Compute sky maps of the instantaneous satellite density, from a specific observatory
 - Predict the number of satellites entering the field of view for a given observation
+- Estimate the fraction of time with at least one satellite in the field of view.
 
 ## Installation
 
@@ -50,7 +51,7 @@ n_satellite_in_obs = compute_total_satellite_density(
     obsloc,                    # Observer
     shells_df,                 # Satellites shells
     np.array([-31.])*u.deg,    # DEC of pointing
-    np.array([110.])*u.deg,    # RA of pointing
+    np.array([0.])*u.deg,    # LHA of pointing
     10.*u.deg,                 # Effective beam width
     3600*u.s                   # exposure time
 )

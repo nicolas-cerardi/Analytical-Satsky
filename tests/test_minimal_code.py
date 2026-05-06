@@ -11,7 +11,7 @@ def minimal_code(ndec, nra):
         obsloc,
         shells_df, 
         np.linspace(-40., -20., num=ndec)*u.deg,
-        np.linspace(100., 120., num=nra)*u.deg, 
+        np.linspace(0., 20., num=nra)*u.deg, 
         10.*u.deg, 
         3600*u.s
     )

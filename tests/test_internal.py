@@ -25,7 +25,7 @@ def test_zero_density_low_i():
         obsloc,
         shells_df, 
         np.array([-30.])*u.deg,
-        np.linspace(100., 120., num=10)*u.deg, 
+        np.linspace(0., 20., num=10)*u.deg, 
         10.*u.deg, 
         3600*u.s
     )
@@ -45,7 +45,7 @@ def test_zero_density_high_dec():
         obsloc,
         shells_df, 
         np.array([-50.])*u.deg,
-        np.linspace(100., 120., num=10)*u.deg, 
+        np.linspace(0., 20., num=10)*u.deg, 
         10.*u.deg, 
         3600*u.s
     )
