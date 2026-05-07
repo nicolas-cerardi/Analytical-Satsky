@@ -7,8 +7,8 @@ This testing file provides test for:
 import numpy as np
 import astropy.units as u
 from astropy.coordinates import EarthLocation
-from analytical_satsky import compute_total_satellite_density, simulate_exposed_time, compute_exposure_fraction
-from analytical_satsky.model import compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats
+from analytical_satsky import MultiShellObs, compute_occupancy_fraction
+from analytical_satsky.model import compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats, compute_exposure_fraction
 import pandas as pd
 
 def test_zero_density_low_i():
@@ -20,8 +20,7 @@ def test_zero_density_low_i():
     })
 
     obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
-
-    n_satellite_in_obs = compute_total_satellite_density(
+    multi_shell_obs = MultiShellObs(
         obsloc,
         shells_df, 
         np.array([-30.])*u.deg,
@@ -29,7 +28,7 @@ def test_zero_density_low_i():
         10.*u.deg, 
         3600*u.s
     )
-    assert np.all(n_satellite_in_obs.value == 0)
+    assert np.all(multi_shell_obs.total_nsats.value == 0)
 
 def test_zero_density_high_dec():
     #create fake Dataframe with 1 shell with high inclination
@@ -41,7 +40,7 @@ def test_zero_density_high_dec():
 
     obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
 
-    n_satellite_in_obs = compute_total_satellite_density(
+    multi_shell_obs = MultiShellObs(
         obsloc,
         shells_df, 
         np.array([-50.])*u.deg,
@@ -49,7 +48,7 @@ def test_zero_density_high_dec():
         10.*u.deg, 
         3600*u.s
     )
-    assert np.all(n_satellite_in_obs.value == 0)
+    assert np.all(multi_shell_obs.total_nsats.value == 0)
 
 def test_unit_d_phi():
     obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
@@ -105,8 +104,15 @@ def test_exposure_fraction():
     Lfov = 10.*u.deg
     texp = 3600*u.s
 
-    all_inits, all_ts = simulate_exposed_time(shells_df, Lfov, obsloc, target_dec, target_lha, texp)
-    frac = compute_exposure_fraction(texp, 3600,all_inits, all_ts)
-    
+    multi_shell_obs = MultiShellObs(obsloc, shells_df, target_dec, target_lha, Lfov, texp)
+    all_inits, all_ts = multi_shell_obs.sample_passes(nstat=100)
+    frac_old = compute_exposure_fraction(texp, 3600, all_inits, all_ts)
+
+    frac = compute_occupancy_fraction(texp, 3600, all_inits, all_ts)
+
+    #test that frac and frac_old are equal
+    assert np.all(frac == frac_old)
+
+
 
 

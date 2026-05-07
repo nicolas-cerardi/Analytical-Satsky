@@ -2,12 +2,13 @@ import numpy as np
 import astropy.units as u
 from astropy.coordinates import EarthLocation
 
-from analytical_satsky import compute_total_satellite_density, load_constellation
+from analytical_satsky import load_constellation, MultiShellObs
+
 
 def minimal_code(ndec, nra):
     shells_df = load_constellation("starlink_filing2")
     obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
-    n_satellite_in_obs = compute_total_satellite_density(
+    multi_shell_obs = MultiShellObs(
         obsloc,
         shells_df, 
         np.linspace(-40., -20., num=ndec)*u.deg,
@@ -15,7 +16,7 @@ def minimal_code(ndec, nra):
         10.*u.deg, 
         3600*u.s
     )
-    return n_satellite_in_obs
+    return multi_shell_obs.total_nsats
 
 def test_shape():
     ndec, nra = 10, 10

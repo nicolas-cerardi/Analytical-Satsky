@@ -42,21 +42,21 @@ A minimal working code:
 import numpy as np
 import astropy.units as u
 from astropy.coordinates import EarthLocation
-from analytical_satsky import compute_total_satellite_density, load_constellation
+from analytical_satsky import load_constellation, MultiShellObs
 
 shells_df = load_constellation("starlink_filing2")
 obsloc = EarthLocation.of_site("SKA-Low")
 
-n_satellite_in_obs = compute_total_satellite_density(
-    obsloc,                    # Observer
-    shells_df,                 # Satellites shells
-    np.array([-31.])*u.deg,    # DEC of pointing
-    np.array([0.])*u.deg,    # LHA of pointing
-    10.*u.deg,                 # Effective beam width
-    3600*u.s                   # exposure time
+multi_shell_obs = MultiShellObs(
+    obsloc, 
+    shells_df, 
+    np.array([-31.])*u.deg, 
+    np.array([0.])*u.deg, 
+    10.*u.deg, 
+    3600*u.s
 )
 
-print(n_satellite_in_obs)
+print(multi_shell_obs.total_nsats)
 ```
 
 For more, see the demo notebooks:

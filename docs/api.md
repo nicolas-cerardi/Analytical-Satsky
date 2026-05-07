@@ -17,13 +17,9 @@ The public API is organized into four categories:
 
 ### Satellite density modelling
 
-* `compute_total_satellite_density(...)`
-* `compute_shell_satellite_density(...)`
-
-### Exposure and observing statistics
-
-* `simulate_exposed_time(...)`
-* `compute_exposure_fraction(...)`
+* `SingleShellObs(...)`
+* `MultiShellObs(...)`
+* `compute_occupancy_fraction(...)`
 
 ### Visualisation
 
@@ -138,188 +134,115 @@ shells = load_constellation("leo", "qianfan", "oneweb")
 * When several names are given, rows are appended in the same order as the input arguments.
 
 ---
+## `SingleShellObs`
 
-## `compute_total_satellite_density(...)`
+Cached model for the contribution of a single satellite shell.
+
+Use this class to evaluate the geometry, projected satellite density, apparent motion, and expected number of satellite crossings for one orbital shell.
 
 ```python
-compute_total_satellite_density(
+SingleShellObs(
     obsloc,
-    shells,
+    shell,
     target_dec,
-    target_ra,
+    target_lha,
     Lfov,
     tobs,
 )
 ```
-
-Compute the expected number of satellites crossing the target field of view during an observation, summed over all input orbital shells.
-
-This is the main high-level modelling function of the package. It evaluates each shell independently and adds their contributions.
 
 ### Parameters
 
 * `obsloc` (`astropy.coordinates.EarthLocation`)
   Location of the observer.
 
-* `shells` (`pandas.DataFrame`)
-  Table describing the orbital shells of the constellation.
+* `shell` (`pandas.Series`)
+  Row describing one orbital shell.
 
-  Required columns:
+  Required fields:
 
-| Column | Meaning                           | Unit          |
-| ------ | --------------------------------- | ------------- |
-| `i`    | Orbital inclination               | degrees       |
-| `h`    | Orbital altitude                  | km            |
-| `n`    | Number of satellites in the shell | dimensionless |
+| Field | Meaning                           | Unit          |
+| ----- | --------------------------------- | ------------- |
+| `i`   | Orbital inclination               | degrees       |
+| `h`   | Orbital altitude                  | km            |
+| `n`   | Number of satellites in the shell | dimensionless |
 
 * `target_dec` (`astropy.units.Quantity`)
-  Declination of the target. Must be convertible to radians.
+  Declination of the target line of sight. Must be angular.
 
 * `target_lha` (`astropy.units.Quantity`)
-  Local hour angle of the target, defined in the observer frame. Must be convertible to radians.
+  Local hour angle of the target line of sight, defined in the observer frame. Must be angular.
 
 * `Lfov` (`astropy.units.Quantity`)
-  Angular diameter of the telescope field of view. Must be convertible to radians.
+  Effective angular diameter of the telescope field of view.
 
 * `tobs` (`astropy.units.Quantity`)
   Observation duration. Must be convertible to seconds.
 
-### Returns
+### Useful attributes
 
-* `astropy.units.Quantity`
-  Expected number of satellites crossing the target field of view during the observation, summed over all shells.
+* `rho_sat`
+  Projected satellite density for the shell.
+
+* `wsat`
+  Apparent satellite angular velocity.
+
+* `nsats`
+  Expected number of satellites crossing the field of view during the observation.
 
 ### Example
 
 ```python
 import astropy.units as u
 from astropy.coordinates import EarthLocation
-from analytical_satsky import load_constellation
-from analytical_satsky import compute_total_satellite_density
+from analytical_satsky import load_constellation, SingleShellObs
 
 obsloc = EarthLocation.of_site("SKA-Mid")
 shells = load_constellation("starlink_filing1")
 
-nsats = compute_total_satellite_density(
+obs = SingleShellObs(
     obsloc=obsloc,
-    shells=shells,
+    shell=shells.iloc[0],
     target_dec=-20.0 * u.deg,
-    target_ra=0.0 * u.deg,
+    target_lha=0.0 * u.deg,
     Lfov=1.0 * u.deg,
     tobs=1.0 * u.hour,
 )
 
-print(nsats)
+print(obs.nsats)
 ```
 
 ### Notes
 
 * Shell tables use plain numeric values (`deg`, `km`, counts), not Astropy quantities.
-* For the contribution of a single shell only, use `compute_shell_satellite_density()`.
+* Derived quantities are evaluated lazily and cached after first access.
+* `target_lha` is the local hour angle of the target, not its right ascension.
 
-## `compute_shell_satellite_density(...)`
+---
+
+## `MultiShellObs`
+
+Cached model for a full constellation made of several orbital shells.
+
+This class builds one `SingleShellObs` model per shell and combines their contributions.
 
 ```python
-compute_shell_satellite_density(
+MultiShellObs(
     obsloc,
-    i,
-    nsat,
-    hsat,
+    shells_df,
     target_dec,
     target_lha,
     Lfov,
     tobs,
 )
 ```
-
-Compute the expected number of satellites crossing the target field of view during an observation, for a single orbital shell.
-
-This is a lower-level function than `compute_total_satellite_density()`.
 
 ### Parameters
 
 * `obsloc` (`astropy.coordinates.EarthLocation`)
   Location of the observer.
 
-* `i` (`astropy.units.Quantity`)
-  Orbital inclination of the shell. Must be convertible to radians.
-
-* `nsat` (`float`)
-  Number of satellites in the shell.
-
-* `hsat` (`astropy.units.Quantity`)
-  Altitude of the shell above the Earth surface. Must be convertible to metres.
-
-* `target_dec` (`astropy.units.Quantity`)
-  Declination of the target. Must be convertible to radians.
-
-* `target_lha` (`astropy.units.Quantity`)
-  Local hour angle of the target in the observer frame. Must be convertible to radians.
-
-* `Lfov` (`astropy.units.Quantity`)
-  Angular diameter of the telescope field of view. Must be convertible to radians.
-
-* `tobs` (`astropy.units.Quantity`)
-  Observation duration. Must be convertible to seconds.
-
-### Returns
-
-* `astropy.units.Quantity`
-  Expected number of satellites crossing the target field of view during the observation.
-
-### Example
-
-```python
-import astropy.units as u
-from astropy.coordinates import EarthLocation
-from analytical_satsky import compute_shell_satellite_density
-
-obsloc = EarthLocation.of_site("SKA-Mid")
-
-nsats = compute_shell_satellite_density(
-    obsloc=obsloc,
-    i=53.0 * u.deg,
-    nsat=1584,
-    hsat=550.0 * u.km,
-    target_dec=30.0 * u.deg,
-    target_lha=0.0 * u.deg,
-    Lfov=5.0 * u.deg,
-    tobs=1.0 * u.hour,
-)
-
-print(nsats)
-```
-
-### Notes
-
-* This function evaluates one circular orbital shell only.
-* To model a full constellation made of several shells, use `compute_total_satellite_density()`.
-* `target_lha` is the local hour angle of the target, not its right ascension.
-* The returned value is an expected number of satellites, not an integer count from a simulation.
-
-## `simulate_exposed_time(...)`
-
-```python
-simulate_exposed_time(
-    shells,
-    Lfov,
-    obsloc,
-    target_dec,
-    target_lha,
-    tobs,
-    nstat=100,
-)
-```
-
-Simulate satellite crossing events during an observation.
-
-This function performs a statistical sampling of satellite passages through the telescope field of view and returns ingress times and crossing durations for all simulated events.
-
-It is useful for estimating time occupancy, data loss fractions, or constructing synthetic timelines of satellite contamination.
-
-### Parameters
-
-* `shells` (`pandas.DataFrame`)
+* `shells_df` (`pandas.DataFrame`)
   Table describing the orbital shells of the constellation.
 
   Required columns:
@@ -330,65 +253,70 @@ It is useful for estimating time occupancy, data loss fractions, or constructing
 | `h`    | Orbital altitude                  | km            |
 | `n`    | Number of satellites in the shell | dimensionless |
 
-* `Lfov` (`astropy.units.Quantity`)
-  Angular diameter of the telescope field of view. Must be convertible to radians.
-
-* `obsloc` (`astropy.coordinates.EarthLocation`)
-  Location of the observer.
-
 * `target_dec` (`astropy.units.Quantity`)
-  Declination of the target. Must be convertible to radians.
+  Declination of the target line of sight. Must be angular.
 
 * `target_lha` (`astropy.units.Quantity`)
-  Local hour angle of the target. Must be convertible to radians.
+  Local hour angle of the target line of sight, defined in the observer frame. Must be angular.
+
+* `Lfov` (`astropy.units.Quantity`)
+  Effective angular diameter of the telescope field of view.
 
 * `tobs` (`astropy.units.Quantity`)
   Observation duration. Must be convertible to seconds.
 
-* `nstat` (`int`, optional)
-  Number of statistical realisations used in the sampling. Default is `100`.
+### Useful attributes and methods
 
-### Returns
+* `shell_models`
+  List of `SingleShellObs` models, one per shell.
 
-* `all_inits` (`array-like`)
-  Simulated ingress times into the effective beam for all sampled satellites from all shells.
+* `nsats_per_shell`
+  Expected number of satellite crossings for each shell.
 
-* `all_ts` (`array-like`)
-  Simulated fly-through durations across the effective beam for all sampled satellites from all shells.
+* `total_satellite_density`
+  Sum of projected satellite densities over all shells.
+
+* `total_nsats`
+  Total expected number of satellites crossing the field of view.
+
+* `sample_passes(nstat)`
+  Draw stochastic satellite passes from the model.
 
 ### Example
 
 ```python
 import astropy.units as u
 from astropy.coordinates import EarthLocation
-from analytical_satsky import load_constellation
-from analytical_satsky import simulate_exposed_time
+from analytical_satsky import load_constellation, MultiShellObs
 
-shells = load_constellation("starlink_march25")
+obsloc = EarthLocation.of_site("SKA-Mid")
+shells = load_constellation("starlink_filing1")
 
-all_inits, all_ts = simulate_exposed_time(
-    shells=shells,
-    Lfov=5.0 * u.deg,
-    obsloc=EarthLocation.of_site("greenwich"),
-    target_dec=20.0 * u.deg,
+obs = MultiShellObs(
+    obsloc=obsloc,
+    shells_df=shells,
+    target_dec=-20.0 * u.deg,
     target_lha=0.0 * u.deg,
+    Lfov=1.0 * u.deg,
     tobs=1.0 * u.hour,
-    nstat=200,
 )
+
+print(obs.total_nsats)
+print(obs.nsats_per_shell)
 ```
 
 ### Notes
 
-* This function returns simulated event times, not deterministic orbital predictions.
-* Increasing `nstat` improves statistical robustness at the cost of runtime.
-* Outputs can be post-processed to estimate occupancy fractions, contamination timelines, or dead-time statistics.
-* For analytical expected counts instead of a sampled catalog, use `compute_total_satellite_density()`. 
+* Use `SingleShellObs` for one shell and `MultiShellObs` for a full constellation.
+* `total_nsats` replaces the older high-level density-count interface.
+* `target_lha` is the local hour angle of the target, not its right ascension.
+* The returned values are expected satellite counts, not integer counts from a deterministic simulation.
 
 
-## `compute_exposure_fraction(...)`
+## `compute_occupancy_fraction(...)`
 
 ```python
-compute_exposure_fraction(
+compute_occupancy_fraction(
     tobs,
     ntimestep,
     all_inits,
@@ -398,9 +326,9 @@ compute_exposure_fraction(
 
 Compute the fraction of observing time during which at least one satellite is present in the effective beam.
 
-This function converts simulated satellite crossing events into time-occupancy fractions for each statistical realisation.
+This function converts sampled satellite crossing events into time-occupancy fractions for each statistical realisation.
 
-It is typically used after `simulate_exposed_time()`.
+It is typically used after generating satellite passes with `MultiShellObs.sample_passes(...)`.
 
 ### Parameters
 
@@ -415,10 +343,18 @@ It is typically used after `simulate_exposed_time()`.
 
   Expected shape: `(nstat, nevents)`.
 
+  Values are assumed to be expressed in seconds.
+
 * `all_ts` (`numpy.ndarray`)
   Fly-through durations across the effective beam for each statistical realisation.
 
   Must have the same shape as `all_inits`.
+
+  Values are assumed to be expressed in seconds.
+
+  Entries with non-positive duration are ignored. This allows the use of
+  placeholder events when the number of sampled events varies between
+  statistical realisations.
 
 ### Returns
 
@@ -427,28 +363,41 @@ It is typically used after `simulate_exposed_time()`.
 
   Returned shape: `(nstat,)`.
 
-Each value lies between `0` and `1`.
-
 ### Example
 
 ```python
-from analytical_satsky import simulate_exposed_time
-from analytical_satsky import compute_exposure_fraction
+import astropy.units as u
+import numpy as np
+import pandas as pd
 
-all_inits, all_ts = simulate_exposed_time(...)
+from astropy.coordinates import EarthLocation
 
-fractions = compute_exposure_fraction(
-    tobs=1.0 * u.hour,
-    ntimestep=1000,
+from analytical_satsky import load_constellations, MultiShellObs, compute_occupancy_fraction
+
+obsloc = EarthLocation.of_site("SKA-Mid")
+shells = load_constellation("starlink_filing1")
+target_dec = np.array([30.0]) * u.deg
+target_lha = np.array([0.0]) * u.deg
+
+obs = MultiShellObs(obsloc, shells, target_dec, target_lha, 10.0 * u.deg, 3600 * u.s)
+all_inits, all_ts = obs.sample_passes(nstat=100)
+
+fractions = compute_occupancy_fraction(
+    tobs=tobs,
+    ntimestep=3600,
     all_inits=all_inits,
     all_ts=all_ts,
 )
+
+print(fractions.mean())
 ```
 
 ### Notes
 
 * This function estimates occupancy numerically using a discrete time grid.
 * Larger `ntimestep` values provide finer time resolution at the cost of additional runtime.
+* The implementation uses a difference-array / cumulative-sum approach to avoid explicitly constructing a boolean occupancy mask for every satellite pass and every timestep.
+* `compute_occupancy_fraction()` replaces the older `compute_exposure_fraction()` interface.
 
 ## `plot_sky_map(...)`
 
