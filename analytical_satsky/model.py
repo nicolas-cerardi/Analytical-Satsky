@@ -623,9 +623,8 @@ def compute_exposure_fraction(
 
     Notes
     -----
-    The function estimates the exposure fraction by discretizing the observation
-    into ``ntimestep`` samples and checking, for each realisation, whether at
-    least one satellite is present in the effective beam at each time sample.
+    Deprecated implementation based on explicit boolean masking. 
+    Please use ``compute_occupancy_fraction`` instead, which uses a more efficient approach.
     """
     
     timeframe = np.linspace(0,tobs.to(u.s).value,ntimestep)
@@ -635,3 +634,79 @@ def compute_exposure_fraction(
         for init, tpass in zip(all_inits[j], all_ts[j]):
             nsat_at_t[j, (timeframe>init)&(timeframe<init+tpass)] += 1
     return np.mean(nsat_at_t>=1, axis=1)
+
+def compute_occupancy_fraction(
+    tobs: Quantity,
+    ntimestep: int,
+    all_inits: np.ndarray,
+    all_ts: np.ndarray,
+) -> np.ndarray:
+    """
+    Compute the fraction of observing time during which at least one satellite
+    is present in the effective beam.
+
+    Parameters
+    ----------
+    tobs : astropy.units.Quantity
+        Observation duration. Must be convertible to seconds.
+    ntimestep : int
+        Number of time samples used to discretize the interval ``[0, tobs]``.
+    all_inits : numpy.ndarray
+        Ingress times into the effective beam for each statistical realisation.
+        Expected shape is ``(nstat, nevents)``, where each row contains the
+        ingress times for one realisation. Values are assumed to be in seconds.
+    all_ts : numpy.ndarray
+        Fly-through durations across the effective beam for each statistical
+        realisation. Must have the same shape as ``all_inits``. Values are
+        assumed to be in seconds.
+
+        Entries with non-positive duration are ignored. This allows the use of
+        placeholder events (e.g. ``tpass = -1``) when the number of sampled
+        events varies between statistical realisations.
+
+    Returns
+    -------
+    numpy.ndarray
+        Exposure fraction for each statistical realisation. The returned array
+        has shape ``(nstat,)``.
+
+    Notes
+    -----
+    This implementation uses a difference-array / cumulative-sum approach to
+    avoid explicitly constructing a boolean mask for every satellite pass and
+    every timestep.
+    """
+
+    tobs_s = tobs.to_value(u.s)
+
+    all_inits = np.asarray(all_inits)
+    all_ts = np.asarray(all_ts)
+
+    if hasattr(all_ts, "unit"):
+        all_ts = all_ts.to_value(u.s)
+
+    if hasattr(all_inits, "unit"):
+        all_inits = all_inits.to_value(u.s)
+
+    nstat, nevents = all_inits.shape
+
+    dt = tobs_s / (ntimestep - 1)
+
+    valid = all_ts > 0
+
+    start_idx = np.floor(all_inits / dt).astype(int) + 1
+    end_idx = np.ceil((all_inits + all_ts) / dt).astype(int)
+
+    start_idx = np.clip(start_idx, 0, ntimestep)
+    end_idx = np.clip(end_idx, 0, ntimestep)
+
+    diff = np.zeros((nstat, ntimestep + 1), dtype=np.int16)
+
+    rows, cols = np.nonzero(valid)
+
+    np.add.at(diff, (rows, start_idx[rows, cols]), 1)
+    np.add.at(diff, (rows, end_idx[rows, cols]), -1)
+
+    occupied = np.cumsum(diff[:, :-1], axis=1) >= 1
+
+    return occupied.mean(axis=1)

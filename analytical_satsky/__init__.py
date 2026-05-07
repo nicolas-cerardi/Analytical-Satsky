@@ -12,10 +12,16 @@ from .model import (
     compute_shell_satellite_density,
     simulate_exposed_time,
     compute_exposure_fraction,
+    compute_occupancy_fraction,
 )
 
 from .plot_utils import (
     plot_sky_map,
+)
+
+from .shell_obs import (
+    SingleShellObs,
+    MultiShellObs,
 )
 
 __all__ = [
@@ -25,7 +31,10 @@ __all__ = [
     "compute_shell_satellite_density",
     "simulate_exposed_time",
     "compute_exposure_fraction",
+    "compute_occupancy_fraction",
     "plot_sky_map",
+    "SingleShellObs",
+    "MultiShellObs",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
