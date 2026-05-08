@@ -152,6 +152,71 @@ class SingleShellObs:
         )
     
 class MultiShellObs:
+    """
+    Cached analytical model for multiple orbital shells.
+
+    One ``SingleShellObs`` instance is created internally for each row
+    of the input shell catalogue.
+
+    Parameters
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location on Earth.
+
+    shells_df : pandas.DataFrame
+        Table describing the orbital shells of the constellation.
+
+    target_dec : astropy.units.Quantity
+        Declination of the target line of sight. Must be angular.
+
+    target_lha : astropy.units.Quantity
+        Local hour angle of the target line of sight. Must be angular.
+
+    Lfov : astropy.units.Quantity
+        Effective telescope field of view. Must be angular.
+
+    tobs : astropy.units.Quantity
+        Observation duration. Must be convertible to seconds.
+
+    Attributes
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+
+    shells_df : pandas.DataFrame
+        Input shell catalogue.
+
+    target_dec : astropy.units.Quantity
+        Target declination in radians.
+
+    target_lha : astropy.units.Quantity
+        Target local hour angle in radians.
+
+    Lfov : astropy.units.Quantity
+        Field of view in radians.
+
+    tobs : astropy.units.Quantity
+        Observation duration.
+
+    shell_models : list[SingleShellObs]
+        List of ``SingleShellObs`` models, one for each orbital shell.
+
+    nsats_per_shell : list
+        Expected number of satellite crossings for each shell.
+
+    total_satellite_density : astropy.units.Quantity
+        Total projected satellite density summed over all shells.
+
+    total_nsats : astropy.units.Quantity
+        Total expected number of satellites crossing the field of view
+        during the observation.
+
+    Methods
+    -------
+    sample_passes(nstat)
+        Draw stochastic satellite crossing events from the analytical
+        model.
+    """
     def __init__(self, obsloc, shells_df, target_dec, target_lha, Lfov, tobs):
         self.obsloc = obsloc
         self.shells_df = shells_df
@@ -184,7 +249,49 @@ class MultiShellObs:
     def total_nsats(self):
         return sum(self.nsats_per_shell)
 
-    def sample_passes(self, nstat):
+    def sample_passes(
+        self,
+        nstat: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Draw stochastic satellite crossing events from the analytical model.
+
+        Parameters
+        ----------
+        nstat : int
+            Number of independent statistical realisations to generate.
+
+        Returns
+        -------
+        all_inits : numpy.ndarray
+            Ingress times into the effective beam for all sampled events.
+
+            The returned array has shape ``(nstat, nevents)``, where
+            ``nevents`` is the total number of sampled events aggregated
+            over all orbital shells.
+
+            Values are expressed in seconds.
+
+        all_ts : numpy.ndarray
+            Fly-through durations across the effective beam for all sampled
+            events.
+
+            The returned array has the same shape as ``all_inits``.
+
+            Values are expressed in seconds.
+
+        Notes
+        -----
+        The number of sampled events varies between statistical realisations
+        because crossings are drawn from Poisson statistics independently
+        for each shell.
+
+        This method combines the contributions from all orbital shells
+        included in the ``MultiShellObs`` instance.
+
+        The returned arrays are intended to be used with
+        ``compute_occupancy_fraction()``.
+        """
         all_inits = []
         all_ts = []
 

@@ -15,7 +15,7 @@ The public API is organized into four categories:
 * `list_constellations()`
 * `load_constellation(name)`
 
-### Satellite density modelling
+### Satellite density and occupancy modelling
 
 * `SingleShellObs(...)`
 * `MultiShellObs(...)`
