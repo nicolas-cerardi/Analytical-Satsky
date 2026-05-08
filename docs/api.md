@@ -12,24 +12,24 @@ The public API is organized into four categories:
 
 ### Constellation management
 
-* `list_constellations()`
-* `load_constellation(name)`
+* [`list_constellations`](#list_constellations)
+* [`load_constellation`](#load_constellation)
 
 ### Satellite density and occupancy modelling
 
-* `SingleShellObs(...)`
-* `MultiShellObs(...)`
-* `compute_occupancy_fraction(...)`
+* [`SingleShellObs`](#singleshellobs)
+* [`MultiShellObs`](#multishellobs)
+* [`compute_occupancy_fraction`](#compute_occupancy_fraction)
 
 ### Visualisation
 
-* `plot_sky_map(...)`
+* [`plot_sky_map`](#plot_sky_map)
 
 ---
 
 # Constellation management
 
-## `list_constellations()`
+## `list_constellations`
 
 ```python
 list_constellations() -> list[str]
@@ -72,8 +72,9 @@ Example output:
 
 * The returned names depend on the installed package version.
 * Use `load_constellation(name)` to load one of these datasets as a `pandas.DataFrame`.
+* For more on constellations see the [constellation page](constellations.md).
 
-## `load_constellation(*names)`
+## `load_constellation`
 
 ```python
 load_constellation(*names: str) -> pandas.DataFrame
@@ -132,6 +133,7 @@ shells = load_constellation("leo", "qianfan", "oneweb")
 * Returned values are plain numeric columns (not Astropy quantities).
 * Users may also create custom constellation tables manually using a compatible `pandas.DataFrame`.
 * When several names are given, rows are appended in the same order as the input arguments.
+* For more on constellations see the [constellation page](constellations.md).
 
 ---
 ## `SingleShellObs`
@@ -217,6 +219,7 @@ print(obs.nsats)
 * Shell tables use plain numeric values (`deg`, `km`, counts), not Astropy quantities.
 * Derived quantities are evaluated lazily and cached after first access.
 * `target_lha` is the local hour angle of the target, not its right ascension.
+* For information on the model assumptions see the [model page](model.md).
 
 ---
 
@@ -313,7 +316,7 @@ print(obs.nsats_per_shell)
 * The returned values are expected satellite counts, not integer counts from a deterministic simulation.
 
 
-## `compute_occupancy_fraction(...)`
+## `compute_occupancy_fraction`
 
 ```python
 compute_occupancy_fraction(
@@ -399,7 +402,11 @@ print(fractions.mean())
 * The implementation uses a difference-array / cumulative-sum approach to avoid explicitly constructing a boolean occupancy mask for every satellite pass and every timestep.
 * `compute_occupancy_fraction()` replaces the older `compute_exposure_fraction()` interface.
 
-## `plot_sky_map(...)`
+---
+
+# Visualisation
+
+## `plot_sky_map`
 
 ```python
 plot_sky_map(
@@ -467,8 +474,5 @@ plot_sky_map(
 ### Notes
 
 * The plot uses a zenith-centred polar projection.
-* Radial coordinate corresponds to zenith angle (`0°` at zenith, `90°` at horizon).
 * Cardinal directions are shown as `N`, `E`, `S`, `W`.
-* The color normalization is logarithmic.
 * Values below the horizon are masked before plotting.
-

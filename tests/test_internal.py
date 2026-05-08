@@ -8,7 +8,8 @@ import numpy as np
 import astropy.units as u
 from astropy.coordinates import EarthLocation
 from analytical_satsky import MultiShellObs, compute_occupancy_fraction
-from analytical_satsky.model import compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats, compute_exposure_fraction
+from analytical_satsky.model import compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats
+from analytical_satsky._legacy import compute_exposure_fraction
 import pandas as pd
 
 def test_zero_density_low_i():
