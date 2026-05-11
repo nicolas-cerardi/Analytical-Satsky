@@ -1,28 +1,67 @@
 import pandas as pd
 from importlib import resources
 
-def _load_csv(name: str) -> pd.DataFrame:
-    """Helper function to load a CSV file from the data folder."""
-    with resources.files("analytical_satsky.shells").joinpath(name).open("rb") as f:
+_CONSTELLATION_FILES = {
+    "starlink_march25": "starlink_march25.csv",
+    "starlink_scaled40000": "starlink_scaled40000.csv",
+    "oneweb": "oneweb.csv",
+    "qianfan": "qianfan.csv",
+    "guowang": "guowang.csv",
+    "starlink_filing1": "starlink_filing1.csv",
+    "starlink_filing2": "starlink_filing2.csv",
+    "leo": "leo.csv",
+}
+
+def _load_csv(filename: str) -> pd.DataFrame:
+    with resources.files("analytical_satsky.shells").joinpath(filename).open("rb") as f:
         return pd.read_csv(f, index_col=0)
 
-def load_table_starlink_march25():
-    return _load_csv("starlink_march25.csv")
+def list_constellations() -> list[str]:
+    """Return the list of available constellation tables."""
+    return sorted(_CONSTELLATION_FILES)
 
-def load_table_starlink_scaled40000():
-    return _load_csv("starlink_scaled40000.csv")
+def load_constellation(*names: str) -> pd.DataFrame:
+    """
+    Load one or several packaged constellation tables by name.
 
-def load_table_oneweb():
-    return _load_csv("oneweb.csv")
+    Parameters
+    ----------
+    *names : str
+        Name(s) of the constellation table(s) to load. Names are case-insensitive.
+        Use `list_constellations()` to see available options.
 
-def load_table_qianfan():
-    return _load_csv("qianfan.csv")
+    Returns
+    -------
+    pandas.DataFrame
+        Constellation table as a dataframe. If several names are provided, the
+        corresponding tables are concatenated in the order of the input names.
+    """
+    if len(names) == 0:
+        available = ", ".join(list_constellations())
+        raise ValueError(
+            f"At least one constellation name must be provided. "
+            f"Available options are: {available}"
+        )
 
-def load_table_guowang():
-    return _load_csv("guowang.csv")
+    normalized_files = {
+        key.lower(): filename for key, filename in _CONSTELLATION_FILES.items()
+    }
 
-def load_table_starlink_filing1():
-    return _load_csv("starlink_filing1.csv")
+    tables = []
 
-def load_table_starlink_filing2():
-    return _load_csv("starlink_filing2.csv")
+    for name in names:
+        name_lower = name.lower()
+
+        try:
+            filename = normalized_files[name_lower]
+        except KeyError as e:
+            available = ", ".join(list_constellations())
+            raise ValueError(
+                f"Unknown constellation table '{name}'. "
+                f"Available options are: {available}"
+            ) from e
+
+        tables.append(_load_csv(filename))
+
+    return pd.concat(tables, ignore_index=True)
+
