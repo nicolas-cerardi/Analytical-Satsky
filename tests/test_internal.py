@@ -1,0 +1,119 @@
+"""
+This testing file provides test for:
+ - units in outputs of internal routines
+ - check values in some simple cases (e.g., zero satellite density for high declinations or low inclinations)
+"""
+
+import numpy as np
+import astropy.units as u
+from astropy.coordinates import EarthLocation
+from analytical_satsky import MultiShellObs, compute_occupancy_fraction
+from analytical_satsky.model import compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats
+from analytical_satsky._legacy import compute_exposure_fraction
+import pandas as pd
+
+def test_zero_density_low_i():
+    #create fake Dataframe with 1 shell with low inclination
+    shells_df = pd.DataFrame({
+        'n': [1000],
+        'h': [500],
+        'i': [10]
+    })
+
+    obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
+    multi_shell_obs = MultiShellObs(
+        obsloc,
+        shells_df, 
+        np.array([-30.])*u.deg,
+        np.linspace(0., 20., num=10)*u.deg, 
+        10.*u.deg, 
+        3600*u.s
+    )
+    assert np.all(multi_shell_obs.total_nsats.value == 0)
+
+def test_zero_density_high_dec():
+    #create fake Dataframe with 1 shell with high inclination
+    shells_df = pd.DataFrame({
+        'n': [1000],
+        'h': [500],
+        'i': [30]
+    })
+
+    obsloc = EarthLocation(lat=-30*u.deg, lon=0*u.deg, height=0*u.m)
+
+    multi_shell_obs = MultiShellObs(
+        obsloc,
+        shells_df, 
+        np.array([-50.])*u.deg,
+        np.linspace(0., 20., num=10)*u.deg, 
+        10.*u.deg, 
+        3600*u.s
+    )
+    assert np.all(multi_shell_obs.total_nsats.value == 0)
+
+def test_unit_d_phi():
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    obslat_rad = obsloc.lat.to(u.rad)
+    hsat_m = 5e5*u.m
+    target_dec_rad = (np.array([30])*u.deg).to(u.rad)
+    target_lha_rad = (np.array([0])*u.deg).to(u.rad)
+
+    d, lat, lon = compute_d_phi(obslat_rad, hsat_m, target_dec_rad, target_lha_rad)
+    assert d.unit == u.m
+    assert lat.unit == u.rad
+    assert lon.unit == u.rad
+
+def test_unit_cosalpha():
+    d = 6e5*u.m
+    hsat_m = 5e5*u.m
+
+    cosalpha = compute_cosalpha(d, hsat_m)
+    assert cosalpha.unit == u.dimensionless_unscaled
+
+def test_unit_wsat():
+    i_rad = (35*u.deg).to(u.rad)
+    lat = 0*u.rad
+    lon = 0*u.rad
+    hsat_m = 5e5*u.m
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    obslat_rad = obsloc.lat.to(u.rad)
+    target_dec_rad = (np.array([30])*u.deg).to(u.rad)
+    target_lha_rad = (np.array([0])*u.deg).to(u.rad)
+
+    wsat = compute_wsat(i_rad, lat, lon, hsat_m, obslat_rad, target_dec_rad, target_lha_rad)
+    assert wsat.unit == u.m / u.s
+
+def test_unit_nsats():
+    rho_sat = 1/u.rad**2
+    Lfov_rad = (10*u.deg).to(u.rad)
+    wsat = 1*u.m/u.s
+    tobs = 3600*u.s
+    d= 6e5*u.m
+
+    nsats = compute_nsats(rho_sat, Lfov_rad, wsat/d*u.rad, tobs)
+    assert nsats.unit == u.dimensionless_unscaled
+
+def test_exposure_fraction():
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    shells_df = pd.DataFrame({
+        'n': [1000],
+        'h': [500],
+        'i': [35]
+    })
+    target_dec = np.array([30.])*u.deg
+    target_lha = np.array([0.])*u.deg
+    Lfov = 10.*u.deg
+    texp = 3600*u.s
+
+    multi_shell_obs = MultiShellObs(obsloc, shells_df, target_dec, target_lha, Lfov, texp)
+    all_inits, all_ts = multi_shell_obs.sample_passes(nstat=100)
+    frac_old = compute_exposure_fraction(texp, 3600, all_inits, all_ts)
+
+    frac = compute_occupancy_fraction(texp, 3600, all_inits, all_ts)
+
+    #test that frac and frac_old are equal
+    assert np.all(frac == frac_old)
+
+
+
+
