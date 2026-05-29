@@ -1,9 +1,12 @@
 import numpy as np
+import pandas as pd
+
 import astropy.units as u
 import astropy.constants as const
 from astropy.coordinates import EarthLocation
-import pandas as pd
+from astropy.time import Time
 from astropy.units import Quantity
+
 from functools import cached_property
 
 from .model import satellite_density, compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats, draw_passes, compute_geocentric_vs
@@ -539,8 +542,8 @@ class SingleShellFlux:
             self.pointing_ra = pointing_ra
             self.pointing_dec = pointing_dec
         else:
-            self.pointing_ra = (obs.pointing_ra * u.deg).value
-            self.pointing_dec = (obs.pointing_dec * u.deg).value
+            self.pointing_ra = (obs.ra.compute() * u.deg).value
+            self.pointing_dec = (obs.dec.compute() * u.deg).value
 
         
         self.Npoints = Npoints
@@ -675,8 +678,8 @@ class MultiShellFlux:
 
         self.obsloc = EarthLocation.from_geocentric(*obs.ITRF.compute()[0] * u.m)
 
-        self.pointing_ra = (obs.pointing_ra * u.deg).value
-        self.pointing_dec = (obs.pointing_dec * u.deg).value
+        self.pointing_ra = (obs.ra.compute() * u.deg).value
+        self.pointing_dec = (obs.dec.compute() * u.deg).value
 
         self.circle_vecs, self.circle_ra, self.circle_dec = pointing_to_radec_circle(
             self.pointing_ra,
@@ -740,4 +743,57 @@ class MultiShellFlux:
         return satellite_catalogue.sort_values(by="tstart").reset_index(drop=True)
 
 class IntegralObsModel:
-    pass
+    def __init__(self, obs, shells_df, Lfov, t_exp_mjd, t_init_mjd, ndec, nra, Npoints, dt):
+        self.obs = obs
+        self.shells_df = shells_df
+        self.Lfov = Lfov #be sure that this is in radians
+        self.t_exp_mjd = t_exp_mjd
+        self.t_init_mjd = t_init_mjd
+        self.ndec = ndec
+        self.nra = nra
+        self.Npoints = Npoints
+        self.dt = dt
+
+        self.obsloc = EarthLocation.from_geocentric(*obs.ITRF.compute()[0] * u.m)
+
+        delta_seconds = (self.t_exp_mjd) * 86400
+        self.n_time_samples = int(np.floor(delta_seconds / self.dt.to(u.s).value))
+
+    def sample_satellites(self):
+
+        #1: Sample MultiShellFoV
+        multi_shell_fov = MultiShellFoV(
+            obs=self.obs,
+            shells_df=self.shells_df,
+            ndec=self.ndec,
+            nra=self.nra,
+            Lfov=self.Lfov,
+            t_mjd=self.t_init_mjd
+        )
+
+        satellite_catalogue = multi_shell_fov.sample_satellites()
+        
+        #2: Sample satellites from MultiShellFlux models at each timesteps
+
+
+        for t in np.linspace(self.t_init_mjd, self.t_init_mjd+self.t_exp_mjd*u.day, self.n_time_samples):
+
+            obs_time = Time(t, format='mjd')
+
+            multi_shell_flux = MultiShellFlux(
+                obs=self.obs,
+                shells_df=self.shells_df,
+                Npoints=self.Npoints,
+                Lfov=self.Lfov,
+                t_mjd=obs_time,
+                t_init_mjd=self.t_init_mjd,
+                dt=self.dt
+            )
+
+            catalogue_flux = multi_shell_flux.sample_satellites()
+
+            satellite_catalogue = pd.concat([satellite_catalogue, catalogue_flux], ignore_index=True)
+        
+        return satellite_catalogue.sort_values(by="tstart").reset_index(drop=True)
+
+
