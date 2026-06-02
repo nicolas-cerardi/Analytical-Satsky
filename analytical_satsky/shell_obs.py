@@ -12,6 +12,15 @@ from functools import cached_property
 from .model import satellite_density, compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats, draw_passes, compute_geocentric_vs
 from .large_fov_model import angular_distance, compute_d_lat_lon_gcrs, pointing_to_radec_circle, compute_flux_vel, local_basis_at_radec
 
+
+def _make_rng(seed=None, rng=None):
+    if seed is not None and rng is not None:
+        raise ValueError("Pass either seed or rng, not both.")
+    if rng is None:
+        rng = np.random.default_rng(seed)
+    return rng
+
+
 class SingleShellObs:
     """
     Cached model for the contribution of a single satellite shell.
@@ -425,15 +434,18 @@ class SingleShellFoV:
     def nsat_shell_obs(self):
         return np.nan_to_num(self.rho_sat.decompose() * self.dOmega.to(u.rad**2))
     
-    def sample_satellites(self):
+    def sample_satellites(self, rng=None):
+
+        rng = _make_rng(rng)
+
         satellite_catalogue = pd.DataFrame(columns=['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"])
 
-        Xsat_shell_obs_N = np.random.poisson(self.nsat_shell_obs/2)
+        Xsat_shell_obs_N = rng.poisson(self.nsat_shell_obs/2)
         for icoord, xsat in enumerate(Xsat_shell_obs_N):
             if xsat > 0:
                 satellite_catalogue = self.compute_orbital_params_samples(satellite_catalogue, icoord, xsat, towards_north=True)
 
-        Xsat_shell_obs_S = np.random.poisson(self.nsat_shell_obs/2)
+        Xsat_shell_obs_S = rng.poisson(self.nsat_shell_obs/2)
         for icoord, xsat in enumerate(Xsat_shell_obs_S):
             if xsat > 0:
                 satellite_catalogue = self.compute_orbital_params_samples(satellite_catalogue, icoord, xsat, towards_north=False)
@@ -507,10 +519,18 @@ class MultiShellFoV:
     def rho_sat(self):
         return sum(np.nan_to_num(shell_model.rho_sat) for shell_model in self.shell_models)
     
-    def sample_satellites(self):
+    @cached_property
+    def nsats_per_shell(self):
+        return [shell_model.nsat_shell_obs.sum() for shell_model in self.shell_models]
+    
+    @cached_property
+    def total_nsats(self):
+        return sum(self.nsats_per_shell)
+    
+    def sample_satellites(self, rng=None):
         satellite_catalogue = pd.DataFrame(columns=['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"])
         for shell_model in self.shell_models:
-            satellite_catalogue = pd.concat([shell_model.sample_satellites(), satellite_catalogue], ignore_index=True)
+            satellite_catalogue = pd.concat([shell_model.sample_satellites(rng=rng), satellite_catalogue], ignore_index=True)
         return satellite_catalogue.sort_values(by="tstart").reset_index(drop=True)
     
     
@@ -636,16 +656,19 @@ class SingleShellFlux:
                                 e_east0, e_north0, e_center, r_dot_E, r_dot_N, r_dot_C, tx, ty, self.t_mjd, self.dt)
         return self.rho_sat.squeeze()/2 * flux_N, self.rho_sat.squeeze()/2 * flux_S
     
-    def sample_satellites(self):
+    def sample_satellites(self, rng=None):
+
+        rng = _make_rng(rng=rng)
+
         satellite_catalogue = pd.DataFrame(columns=['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"])
 
         satflux_N, satflux_S = self.shell_nsat_fluxes
-        Xsat_shell_obs_N = np.random.poisson(np.nan_to_num(satflux_N).decompose())
+        Xsat_shell_obs_N = rng.poisson(np.nan_to_num(satflux_N).decompose())
         for icoord, xsat in enumerate(Xsat_shell_obs_N):
             if xsat > 0:
                 satellite_catalogue = self.compute_orbital_params_samples(satellite_catalogue, icoord, xsat, towards_north=True)
 
-        Xsat_shell_obs_S = np.random.poisson(np.nan_to_num(satflux_S).decompose())
+        Xsat_shell_obs_S = rng.poisson(np.nan_to_num(satflux_S).decompose())
         for icoord, xsat in enumerate(Xsat_shell_obs_S):
             if xsat > 0:
                 satellite_catalogue = self.compute_orbital_params_samples(satellite_catalogue, icoord, xsat, towards_north=False)
@@ -719,7 +742,7 @@ class MultiShellFlux:
 
         return sum(flux_N), sum(flux_S)
 
-    def sample_satellites(self):
+    def sample_satellites(self, rng=None):
         satellite_catalogue = pd.DataFrame(
             columns=[
                 "N",
@@ -736,7 +759,7 @@ class MultiShellFlux:
 
         for shell_model in self.shell_models:
             satellite_catalogue = pd.concat(
-                [shell_model.sample_satellites(), satellite_catalogue],
+                [shell_model.sample_satellites(rng=rng), satellite_catalogue],
                 ignore_index=True,
             )
 
@@ -759,10 +782,7 @@ class IntegralObsModel:
         delta_seconds = (self.t_exp_mjd) * 86400
         self.n_time_samples = int(np.floor(delta_seconds / self.dt.to(u.s).value))
 
-    def sample_satellites(self):
-
-        #1: Sample MultiShellFoV
-        multi_shell_fov = MultiShellFoV(
+        self.initial_multi_shell_fov = MultiShellFoV(
             obs=self.obs,
             shells_df=self.shells_df,
             ndec=self.ndec,
@@ -771,7 +791,11 @@ class IntegralObsModel:
             t_mjd=self.t_init_mjd
         )
 
-        satellite_catalogue = multi_shell_fov.sample_satellites()
+    def sample_satellites(self, seed=None, rng=None):
+
+        rng = _make_rng(seed=seed, rng=rng)
+
+        satellite_catalogue = self.initial_multi_shell_fov.sample_satellites(rng=rng)
         
         #2: Sample satellites from MultiShellFlux models at each timesteps
 
@@ -790,7 +814,7 @@ class IntegralObsModel:
                 dt=self.dt
             )
 
-            catalogue_flux = multi_shell_flux.sample_satellites()
+            catalogue_flux = multi_shell_flux.sample_satellites(rng=rng)
 
             satellite_catalogue = pd.concat([satellite_catalogue, catalogue_flux], ignore_index=True)
         
