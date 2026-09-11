@@ -533,6 +533,29 @@ def simulate_exposed_time(
     all_ts = np.concatenate(all_ts, axis=1)
     return all_inits, all_ts
 
+def compute_flythrough_duration(hs, Lfov, wsat, d):
+    ''' Fly-through duration across the effective beam for a satellite crossing
+    with a given perpendicular offset from the beam centre.
+
+    Parameters
+    ----------
+    hs : array-like
+        Perpendicular offset from the field-of-view centre, expressed in the
+        same units as ``Lfov.value``.
+    Lfov : astropy Quantity
+        Field of view of the telescope (in rad).
+    wsat : astropy Quantity
+        Mean apparent velocities of the satellites as a function of ra, dec.
+    d : astropy Quantity
+        Distance from observer to the shell as a function of the l.o.s. ra,dec
+
+    Returns
+    -------
+    ts : astropy Quantity
+        Fly-through duration across the effective beam, for each offset in ``hs``.
+    '''
+    return 2*np.cos(np.arcsin(hs/(Lfov.value/2)))*(Lfov.to(u.rad)/2)/(wsat/d.to(u.m)*u.rad)
+
 def draw_passes(n_samp, Lfov, wsat, d, tobs):
     ''' Draw the satellite passes for a given number of satellites, from a given shell.
     

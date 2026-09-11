@@ -9,7 +9,7 @@ from astropy.units import Quantity
 
 from functools import cached_property
 
-from .model import satellite_density, compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats, draw_passes, compute_geocentric_vs
+from .model import satellite_density, compute_d_phi, compute_cosalpha, compute_wsat, compute_nsats, compute_flythrough_duration, compute_geocentric_vs
 from .large_fov_model import angular_distance, compute_d_lat_lon_gcrs, pointing_to_radec_circle, compute_flux_vel, local_basis_at_radec
 
 
@@ -164,7 +164,41 @@ class SingleShellObs:
                 self.tobs,
             )
         )
-    
+
+    def sample_passes(self, rng, nstat):
+        """
+        Draw stochastic satellite crossing events for this shell.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator
+            Random number generator to draw samples from.
+        nstat : int
+            Number of independent statistical realisations to generate.
+
+        Returns
+        -------
+        inits : numpy.ndarray or None
+            Ingress times, shape ``(nstat, nevents)``. ``None`` if no
+            satellite crossing was sampled for this shell.
+        ts : astropy.units.Quantity or None
+            Fly-through durations, shape ``(nstat, nevents)``. ``None`` if
+            no satellite crossing was sampled for this shell.
+        """
+        n_sample = rng.poisson(self.nsats.value.squeeze(), size=nstat).squeeze()
+
+        if not np.any(n_sample > 0):
+            return None, None
+
+        nsamp = n_sample.size
+        nsampmax = n_sample.max()
+        hs = rng.uniform(low=-self.Lfov.value/2, high=self.Lfov.value/2, size=(nsamp, nsampmax))
+        inits = rng.uniform(low=0., high=self.tobs.value, size=(nsamp, nsampmax))
+        ts = compute_flythrough_duration(hs, self.Lfov, self.wsat, self.d)
+        for j in range(nsamp):
+            ts[j, n_sample[j]:] = -1 *u.s
+        return inits, ts
+
 class MultiShellObs:
     """
     Cached analytical model for multiple orbital shells.
@@ -266,6 +300,8 @@ class MultiShellObs:
     def sample_passes(
         self,
         nstat: int,
+        seed: int = None,
+        rng: np.random.Generator = None,
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Draw stochastic satellite crossing events from the analytical model.
@@ -274,6 +310,13 @@ class MultiShellObs:
         ----------
         nstat : int
             Number of independent statistical realisations to generate.
+        seed : int, optional
+            Seed used to build a reproducible random number generator.
+            Mutually exclusive with ``rng``.
+        rng : numpy.random.Generator, optional
+            Pre-built random number generator to draw samples from.
+            Mutually exclusive with ``seed``. If neither ``seed`` nor
+            ``rng`` is given, a non-reproducible generator is created.
 
         Returns
         -------
@@ -306,24 +349,15 @@ class MultiShellObs:
         The returned arrays are intended to be used with
         ``compute_occupancy_fraction()``.
         """
+        rng = _make_rng(seed=seed, rng=rng)
+
         all_inits = []
         all_ts = []
 
         for shell_model in self.shell_models:
-            n_sample = np.random.poisson(
-                shell_model.nsats.value.squeeze(),
-                size=nstat,
-            ).squeeze()
+            tmp_inits, tmp_ts = shell_model.sample_passes(rng, nstat)
 
-            if np.any(n_sample > 0):
-                tmp_inits, tmp_ts = draw_passes(
-                    n_sample,
-                    shell_model.Lfov,
-                    shell_model.wsat,
-                    shell_model.d,
-                    shell_model.tobs,
-                )
-
+            if tmp_inits is not None:
                 all_inits.append(tmp_inits)
                 all_ts.append(tmp_ts.to(u.s).value)
         all_inits = np.concatenate(all_inits, axis=1)

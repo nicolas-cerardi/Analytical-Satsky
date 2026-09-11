@@ -93,6 +93,28 @@ def test_unit_nsats():
     nsats = compute_nsats(rho_sat, Lfov_rad, wsat/d*u.rad, tobs)
     assert nsats.unit == u.dimensionless_unscaled
 
+def test_sample_passes_seed_reproducible():
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    shells_df = pd.DataFrame({
+        'n': [1000],
+        'h': [500],
+        'i': [35]
+    })
+    target_dec = np.array([30.])*u.deg
+    target_lha = np.array([0.])*u.deg
+    Lfov = 10.*u.deg
+    texp = 3600*u.s
+
+    multi_shell_obs = MultiShellObs(obsloc, shells_df, target_dec, target_lha, Lfov, texp)
+
+    inits_a, ts_a = multi_shell_obs.sample_passes(nstat=100, seed=42)
+    inits_b, ts_b = multi_shell_obs.sample_passes(nstat=100, seed=42)
+    inits_c, ts_c = multi_shell_obs.sample_passes(nstat=100, seed=1)
+
+    assert np.array_equal(inits_a, inits_b)
+    assert np.array_equal(ts_a, ts_b)
+    assert not np.array_equal(inits_a, inits_c)
+
 def test_exposure_fraction():
     obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
     shells_df = pd.DataFrame({

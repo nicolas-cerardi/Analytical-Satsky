@@ -375,14 +375,15 @@ import pandas as pd
 
 from astropy.coordinates import EarthLocation
 
-from analytical_satsky import load_constellations, MultiShellObs, compute_occupancy_fraction
+from analytical_satsky import load_constellation, MultiShellObs, compute_occupancy_fraction
 
 obsloc = EarthLocation.of_site("SKA-Mid")
 shells = load_constellation("starlink_filing1")
 target_dec = np.array([30.0]) * u.deg
 target_lha = np.array([0.0]) * u.deg
+tobs = 3600 * u.s
 
-obs = MultiShellObs(obsloc, shells, target_dec, target_lha, 10.0 * u.deg, 3600 * u.s)
+obs = MultiShellObs(obsloc, shells, target_dec, target_lha, 10.0 * u.deg, tobs)
 all_inits, all_ts = obs.sample_passes(nstat=100)
 
 fractions = compute_occupancy_fraction(
