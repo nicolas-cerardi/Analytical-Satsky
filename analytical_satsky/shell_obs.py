@@ -348,6 +348,9 @@ class MultiShellObs:
 
         The returned arrays are intended to be used with
         ``compute_occupancy_fraction()``.
+
+        If no satellite crossing is sampled for any shell, both arrays are
+        returned with shape ``(nstat, 0)``.
         """
         rng = _make_rng(seed=seed, rng=rng)
 
@@ -360,6 +363,10 @@ class MultiShellObs:
             if tmp_inits is not None:
                 all_inits.append(tmp_inits)
                 all_ts.append(tmp_ts.to(u.s).value)
+
+        if not all_inits:
+            return np.empty((nstat, 0)), np.empty((nstat, 0))
+
         all_inits = np.concatenate(all_inits, axis=1)
         all_ts = np.concatenate(all_ts, axis=1)
         return all_inits, all_ts

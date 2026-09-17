@@ -115,6 +115,29 @@ def test_sample_passes_seed_reproducible():
     assert np.array_equal(ts_a, ts_b)
     assert not np.array_equal(inits_a, inits_c)
 
+def test_sample_passes_all_shells_empty():
+    # A shell with n=0 satellites always samples zero crossings, so every
+    # shell model returns (None, None) from sample_passes. This currently
+    # crashes MultiShellObs.sample_passes (np.concatenate on an empty list).
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    shells_df = pd.DataFrame({
+        'n': [0],
+        'h': [500],
+        'i': [35]
+    })
+    target_dec = np.array([30.])*u.deg
+    target_lha = np.array([0.])*u.deg
+    Lfov = 10.*u.deg
+    texp = 3600*u.s
+
+    multi_shell_obs = MultiShellObs(obsloc, shells_df, target_dec, target_lha, Lfov, texp)
+
+    nstat = 100
+    all_inits, all_ts = multi_shell_obs.sample_passes(nstat=nstat, seed=42)
+
+    assert all_inits.shape == (nstat, 0)
+    assert all_ts.shape == (nstat, 0)
+
 def test_exposure_fraction():
     obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
     shells_df = pd.DataFrame({
