@@ -117,8 +117,7 @@ def test_sample_passes_seed_reproducible():
 
 def test_sample_passes_all_shells_empty():
     # A shell with n=0 satellites always samples zero crossings, so every
-    # shell model returns (None, None) from sample_passes. This currently
-    # crashes MultiShellObs.sample_passes (np.concatenate on an empty list).
+    # shell model returns (None, None) from sample_passes.
     obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
     shells_df = pd.DataFrame({
         'n': [0],
@@ -159,6 +158,97 @@ def test_exposure_fraction():
     #test that frac and frac_old are equal
     assert np.all(frac == frac_old)
 
+def test_total_nsats_regression_snapshot():
+    # total_nsats is fully deterministic (no sampling involved), so its
+    # value for a fixed input is frozen here as a stability guard against
+    # unintended future changes to the analytical pipeline (density,
+    # geometry, apparent velocity, FoV term). This value was computed with
+    # the current implementation and is not independently derived by hand.
+    obsloc = EarthLocation(lat=30*u.deg, lon=0*u.deg, height=0*u.m)
+    shells_df = pd.DataFrame({
+        'n': [1000],
+        'h': [500],
+        'i': [35]
+    })
+    target_dec = np.array([30.])*u.deg
+    target_lha = np.array([0.])*u.deg
+    Lfov = 10.*u.deg
+    texp = 3600*u.s
+
+    multi_shell_obs = MultiShellObs(obsloc, shells_df, target_dec, target_lha, Lfov, texp)
+
+    assert np.isclose(multi_shell_obs.total_nsats.value[0, 0], 8.555423835639305, rtol=1e-8)
 
 
+# Hand-computed cases for compute_occupancy_fraction, independent of the
+# legacy implementation. All use tobs=10s, ntimestep=11 -> dt=1s exactly,
+# so grid samples fall at t=0,1,...,10 and the expected fraction can be
+# derived by hand from the diff-array/cumsum logic.
+
+def test_occupancy_fraction_single_pass():
+    tobs = 10*u.s
+    ntimestep = 11
+    all_inits = np.array([[2.]])
+    all_ts = np.array([[3.]])
+
+    frac = compute_occupancy_fraction(tobs, ntimestep, all_inits, all_ts)
+
+    # start_idx=floor(2/1)+1=3, end_idx=ceil(5/1)=5 -> occupied idx {3,4}
+    assert np.isclose(frac[0], 2/11)
+
+def test_occupancy_fraction_overlapping_passes():
+    tobs = 10*u.s
+    ntimestep = 11
+    all_inits = np.array([[2., 3.]])
+    all_ts = np.array([[3., 3.]])
+
+    frac = compute_occupancy_fraction(tobs, ntimestep, all_inits, all_ts)
+
+    # pass A occupies idx {3,4}, pass B occupies idx {4,5} -> union {3,4,5}.
+    # Must be 3/11, not 4/11 (naive sum of the two non-overlapping fractions).
+    assert np.isclose(frac[0], 3/11)
+
+def test_occupancy_fraction_clips_start():
+    tobs = 10*u.s
+    ntimestep = 11
+    all_inits = np.array([[-2.]])
+    all_ts = np.array([[3.]])
+
+    frac = compute_occupancy_fraction(tobs, ntimestep, all_inits, all_ts)
+
+    # start_idx clipped from -1 to 0, end_idx=ceil(1/1)=1 -> occupied idx {0}
+    assert np.isclose(frac[0], 1/11)
+
+def test_occupancy_fraction_clips_end():
+    tobs = 10*u.s
+    ntimestep = 11
+    all_inits = np.array([[9.]])
+    all_ts = np.array([[5.]])
+
+    frac = compute_occupancy_fraction(tobs, ntimestep, all_inits, all_ts)
+
+    # start_idx=floor(9/1)+1=10, end_idx clipped from 14 to 11 -> occupied idx {10}
+    assert np.isclose(frac[0], 1/11)
+
+def test_occupancy_fraction_invalid_ts_is_zero():
+    tobs = 10*u.s
+    ntimestep = 11
+    all_inits = np.array([[0.]])
+    all_ts = np.array([[-1.]])
+
+    frac = compute_occupancy_fraction(tobs, ntimestep, all_inits, all_ts)
+
+    # ts <= 0 is the padding sentinel for "no event" -> must not count
+    assert frac[0] == 0
+
+def test_occupancy_fraction_full_span():
+    tobs = 10*u.s
+    ntimestep = 11
+    all_inits = np.array([[-1.]])
+    all_ts = np.array([[12.]])
+
+    frac = compute_occupancy_fraction(tobs, ntimestep, all_inits, all_ts)
+
+    # Pass starts before t=0 and ends after tobs -> every grid sample occupied
+    assert np.isclose(frac[0], 1.0)
 
