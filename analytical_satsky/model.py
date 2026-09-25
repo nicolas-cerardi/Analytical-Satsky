@@ -598,6 +598,11 @@ def compute_occupancy_fraction(
     Compute the fraction of observing time during which at least one satellite
     is present in the effective beam.
 
+    This function converts sampled satellite crossing events into
+    time-occupancy fractions for each statistical realisation. It is
+    typically used after generating satellite passes with
+    ``MultiShellObs.sample_passes(...)``.
+
     Parameters
     ----------
     tobs : astropy.units.Quantity
@@ -623,11 +628,33 @@ def compute_occupancy_fraction(
         Exposure fraction for each statistical realisation. The returned array
         has shape ``(nstat,)``.
 
+    Examples
+    --------
+    >>> import astropy.units as u
+    >>> import numpy as np
+    >>> from astropy.coordinates import EarthLocation
+    >>> from analytical_satsky import load_constellation, MultiShellObs, compute_occupancy_fraction
+    >>> obsloc = EarthLocation.of_site("SKA-Mid")
+    >>> shells = load_constellation("starlink_filing1")
+    >>> target_dec = np.array([30.0]) * u.deg
+    >>> target_lha = np.array([0.0]) * u.deg
+    >>> tobs = 3600 * u.s
+    >>> obs = MultiShellObs(obsloc, shells, target_dec, target_lha, 10.0 * u.deg, tobs)
+    >>> all_inits, all_ts = obs.sample_passes(nstat=100)
+    >>> fractions = compute_occupancy_fraction(
+    ...     tobs=tobs,
+    ...     ntimestep=3600,
+    ...     all_inits=all_inits,
+    ...     all_ts=all_ts,
+    ... )
+    >>> fractions.mean()
+
     Notes
     -----
     This implementation uses a difference-array / cumulative-sum approach to
     avoid explicitly constructing a boolean mask for every satellite pass and
-    every timestep.
+    every timestep. Larger ``ntimestep`` values provide finer time resolution
+    at the cost of additional runtime.
     """
 
     tobs_s = tobs.to_value(u.s)

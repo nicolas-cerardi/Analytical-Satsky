@@ -74,12 +74,39 @@ class SingleShellObs:
         Shell altitude.
     obslat : astropy.units.Quantity
         Observer latitude in radians.
+    rho_sat : astropy.units.Quantity
+        Projected satellite density for the shell.
+    wsat : astropy.units.Quantity
+        Apparent satellite angular velocity.
+    nsats : astropy.units.Quantity
+        Expected number of satellites crossing the field of view during the
+        observation.
+
+    Examples
+    --------
+    >>> import astropy.units as u
+    >>> from astropy.coordinates import EarthLocation
+    >>> from analytical_satsky import load_constellation, SingleShellObs
+    >>> obsloc = EarthLocation.of_site("SKA-Mid")
+    >>> shells = load_constellation("starlink_filing1")
+    >>> obs = SingleShellObs(
+    ...     obsloc=obsloc,
+    ...     shell=shells.iloc[0],
+    ...     target_dec=-20.0 * u.deg,
+    ...     target_lha=0.0 * u.deg,
+    ...     Lfov=1.0 * u.deg,
+    ...     tobs=1.0 * u.hour,
+    ... )
+    >>> obs.nsats
 
     Notes
     -----
     Most derived quantities are implemented as ``cached_property`` objects.
     They are therefore computed only once upon first access and then stored
     on the instance for reuse.
+
+    ``target_lha`` is the local hour angle of the target. Shell fields (``"i"``, ``"h"``, ``"n"``) are plain floats, not
+    Astropy quantities.
     """
 
     def __init__(
@@ -133,6 +160,7 @@ class SingleShellObs:
 
     @cached_property
     def rho_sat(self):
+        """astropy.units.Quantity: Projected satellite density for the shell."""
         return satellite_density(
             self.Nsat,
             self.lat,
@@ -144,6 +172,7 @@ class SingleShellObs:
 
     @cached_property
     def wsat(self):
+        """astropy.units.Quantity: Apparent satellite angular velocity."""
         return compute_wsat(
             self.i,
             self.lat,
@@ -156,6 +185,8 @@ class SingleShellObs:
 
     @cached_property
     def nsats(self):
+        """astropy.units.Quantity: Expected number of satellites crossing the
+        field of view during the observation."""
         return np.nan_to_num(
             compute_nsats(
                 self.rho_sat,
@@ -264,6 +295,30 @@ class MultiShellObs:
     sample_passes(nstat)
         Draw stochastic satellite crossing events from the analytical
         model.
+
+    Examples
+    --------
+    >>> import astropy.units as u
+    >>> from astropy.coordinates import EarthLocation
+    >>> from analytical_satsky import load_constellation, MultiShellObs
+    >>> obsloc = EarthLocation.of_site("SKA-Mid")
+    >>> shells = load_constellation("starlink_filing1")
+    >>> obs = MultiShellObs(
+    ...     obsloc=obsloc,
+    ...     shells_df=shells,
+    ...     target_dec=-20.0 * u.deg,
+    ...     target_lha=0.0 * u.deg,
+    ...     Lfov=1.0 * u.deg,
+    ...     tobs=1.0 * u.hour,
+    ... )
+    >>> obs.total_nsats
+    >>> obs.nsats_per_shell
+
+    Notes
+    -----
+    ``target_lha`` is the local hour angle of the target. Returned satellite counts (``total_nsats``, ``nsats_per_shell``)
+    are expectation values from the analytical model, not integer counts from
+    a deterministic simulation.
     """
     def __init__(self, obsloc, shells_df, target_dec, target_lha, Lfov, tobs):
         self.obsloc = obsloc

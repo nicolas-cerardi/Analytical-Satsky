@@ -25,8 +25,9 @@ def plot_sky_map(
     Plot a sky map in local horizon coordinates.
 
     The input map is defined on a local hour angle / declination grid and is
-    projected to altitude / azimuth coordinates for the given observatory.
-    Points below the horizon are masked.
+    projected to altitude / azimuth coordinates for the given observatory,
+    using a zenith-centred polar projection with cardinal directions labelled
+    ``N``, ``E``, ``S``, ``W``. Points below the horizon are masked.
 
     Parameters
     ----------
@@ -52,6 +53,18 @@ def plot_sky_map(
     -------
     tuple[matplotlib.figure.Figure, matplotlib.axes.Axes] or None
         Figure and polar axes if ``return_fig`` is True, otherwise None.
+
+    Examples
+    --------
+    >>> import astropy.units as u
+    >>> from astropy.coordinates import EarthLocation
+    >>> from analytical_satsky import plot_sky_map
+    >>> plot_sky_map(
+    ...     sky_map=sky_map,
+    ...     obsloc=EarthLocation.of_site("greenwich"),
+    ...     target_lha=lha_grid * u.deg,
+    ...     target_dec=dec_grid * u.deg,
+    ... )
 
     Notes
     -----
