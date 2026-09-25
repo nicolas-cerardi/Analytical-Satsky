@@ -40,6 +40,12 @@ dev = [
   "twine",
 ]
 
+docs = [
+  "mkdocs",
+  "mkdocstrings[python]",
+  "mkdocs-material",
+]
+
 [tool.setuptools]
 include-package-data = true
 
