@@ -12,8 +12,8 @@ The public API is organized into four categories:
 
 ### Constellation management
 
-* [`list_constellations`](#list_constellations)
-* [`load_constellation`](#load_constellation)
+* [`list_constellations`](#analytical_satsky.list_constellations)
+* [`load_constellation`](#analytical_satsky.load_constellation)
 
 ### Satellite density and occupancy modelling
 
@@ -29,111 +29,13 @@ The public API is organized into four categories:
 
 # Constellation management
 
-## `list_constellations`
+::: analytical_satsky.list_constellations
 
-```python
-list_constellations() -> list[str]
-```
+For more on constellations see the [constellation page](constellations.md).
 
-Return the list of predefined satellite constellation tables bundled with the package.
+::: analytical_satsky.load_constellation
 
-This is the recommended way to discover which built-in constellation datasets are available on the current installed version.
-
-### Returns
-
-* `list[str]`
-  A list of constellation names that can be passed to `load_constellation()`.
-
-### Example
-
-```python
-from analytical_satsky import list_constellations
-
-names = list_constellations()
-print(names)
-```
-
-Example output:
-
-```python
-[
-    "starlink_march25",
-    "starlink_scaled40000",
-    "oneweb",
-    "qianfan",
-    "guowang",
-    "starlink_filing1",
-    "starlink_filing2",
-    "leo",
-]
-```
-
-### Notes
-
-* The returned names depend on the installed package version.
-* Use `load_constellation(name)` to load one of these datasets as a `pandas.DataFrame`.
-* For more on constellations see the [constellation page](constellations.md).
-
-## `load_constellation`
-
-```python
-load_constellation(*names: str) -> pandas.DataFrame
-```
-
-Load one or several predefined satellite constellation tables bundled with the package.
-
-The returned object is a `pandas.DataFrame` where each row represents one orbital shell of a constellation.
-
-If several names are provided, the corresponding tables are concatenated in the order of the input names.
-
-### Parameters
-
-* `*names` (`str`)
-  One or several constellation names to load.
-
-Names are case-insensitive.
-
-Use `list_constellations()` to see all available built-in options.
-
-### Returns
-
-* `pandas.DataFrame`
-  A table containing one row per orbital shell, with the columns:
-
-| Column | Meaning                           | Unit          |
-| ------ | --------------------------------- | ------------- |
-| `i`    | Orbital inclination               | degrees       |
-| `h`    | Orbital altitude                  | km            |
-| `n`    | Number of satellites in the shell | dimensionless |
-
-### Examples
-
-Load a single constellation:
-
-```python
-from analytical_satsky import load_constellation
-
-shells = load_constellation("oneweb")
-```
-
-Load several constellations and combine them:
-
-```python
-shells = load_constellation("leo", "qianfan", "oneweb")
-```
-
-### Raises
-
-* `ValueError`
-  If no name is provided, or if one of the input names does not match an available packaged constellation.
-
-### Notes
-
-* Use `list_constellations()` to show valid names.
-* Returned values are plain numeric columns (not Astropy quantities).
-* Users may also create custom constellation tables manually using a compatible `pandas.DataFrame`.
-* When several names are given, rows are appended in the same order as the input arguments.
-* For more on constellations see the [constellation page](constellations.md).
+For more on constellations see the [constellation page](constellations.md).
 
 ---
 ## `SingleShellObs`

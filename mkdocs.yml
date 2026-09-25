@@ -1,0 +1,19 @@
+site_name: Analytical-Satsky
+
+theme:
+  name: material
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: numpy
+            show_root_heading: true
+
+nav:
+  - Home: index.md
+  - Model: model.md
+  - Constellations: constellations.md
+  - API Reference: api.md
