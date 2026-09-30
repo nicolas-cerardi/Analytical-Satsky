@@ -427,6 +427,87 @@ class MultiShellObs:
         return all_inits, all_ts
     
 class SingleShellFoV:
+    """
+    Cached model for the contribution of a single satellite shell, sampled
+    on a RA/Dec grid over the field of view.
+
+    Large-FoV counterpart of ``SingleShellObs``: instead of a single target
+    line of sight parametrized by local hour angle, this class evaluates
+    the shell's contribution over a grid of RA/Dec points at an explicit
+    observation time.
+
+    Parameters
+    ----------
+    obs : object
+        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``.
+        Only used to derive ``obsloc``/``pointing_ra``/``pointing_dec`` when
+        those are not given directly.
+    shell : pandas.Series
+        Row of the shell catalogue describing a single orbital shell (same
+        ``"i"``/``"h"``/``"n"`` fields as ``SingleShellObs``).
+    ndec : int, optional
+        Number of declination grid points. Required if ``ra_grid``/
+        ``dec_grid`` are not given.
+    nra : int, optional
+        Number of right ascension grid points. Required if ``ra_grid``/
+        ``dec_grid`` are not given.
+    Lfov : astropy.units.Quantity
+        Effective telescope field of view, in radians.
+    t_mjd : astropy.time.Time
+        Observation time.
+    ra_grid : astropy.units.Quantity, optional
+        Precomputed right ascension grid. If given, ``dec_grid``,
+        ``FoV_mask`` and ``dOmega`` must also be given.
+    dec_grid : astropy.units.Quantity, optional
+        Precomputed declination grid.
+    FoV_mask : numpy.ndarray, optional
+        Boolean mask selecting the grid points that lie inside the field
+        of view.
+    obsloc : astropy.coordinates.EarthLocation, optional
+        Observer location. Overrides ``obs.ITRF`` if given.
+    pointing_ra : astropy.units.Quantity, optional
+        Telescope pointing right ascension. Overrides ``obs.ra`` if given.
+    pointing_dec : astropy.units.Quantity, optional
+        Telescope pointing declination. Overrides ``obs.dec`` if given.
+    dOmega : astropy.units.Quantity, optional
+        Solid angle element of each grid point inside the field of view.
+
+    Attributes
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+    pointing_ra : astropy.units.Quantity
+        Telescope pointing right ascension.
+    pointing_dec : astropy.units.Quantity
+        Telescope pointing declination.
+    shell : pandas.Series
+        Shell description.
+    i : astropy.units.Quantity
+        Orbital inclination in radians.
+    Nsat : int
+        Number of satellites in the shell.
+    hsat : astropy.units.Quantity
+        Shell altitude.
+    obslat : astropy.units.Quantity
+        Observer latitude in radians.
+    ra_grid : astropy.units.Quantity
+        Right ascension grid.
+    dec_grid : astropy.units.Quantity
+        Declination grid.
+    FoV_mask : numpy.ndarray
+        Boolean mask selecting grid points inside the field of view.
+    dOmega : astropy.units.Quantity
+        Solid angle element of each grid point inside the field of view.
+    rho_sat : astropy.units.Quantity
+        Projected satellite density for the shell.
+    nsat_shell_obs : astropy.units.Quantity
+        Expected number of satellites in each field-of-view grid cell.
+
+    Notes
+    -----
+    Parametrizes targets by true RA/Dec and an explicit MJD time, unlike
+    ``SingleShellObs``'s local-hour-angle convention.
+    """
     def __init__(
         self,
         obs,
@@ -517,6 +598,7 @@ class SingleShellFoV:
 
     @cached_property
     def rho_sat(self):
+        """astropy.units.Quantity: Projected satellite density for the shell."""
         return satellite_density(
             self.Nsat,
             self.lat,
@@ -525,13 +607,30 @@ class SingleShellFoV:
             self.d,
             self.cosalpha,
         )
-    
+
     @cached_property
     def nsat_shell_obs(self):
+        """astropy.units.Quantity: Expected number of satellites in each
+        field-of-view grid cell."""
         return np.nan_to_num(self.rho_sat.decompose() * self.dOmega.to(u.rad**2))
-    
-    def sample_satellites(self, rng=None):
 
+    def sample_satellites(self, rng=None):
+        """
+        Draw a stochastic satellite catalogue for this shell.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator, optional
+            Random number generator to draw samples from. If not given, a
+            non-reproducible generator is created.
+
+        Returns
+        -------
+        satellite_catalogue : pandas.DataFrame
+            One row per sampled satellite, with columns ``N``, ``i``, ``h``,
+            ``long_asc_node``, ``periapsis``, ``decstart``, ``rastart``,
+            ``tstart``, ``towards``.
+        """
         rng = _make_rng(rng)
 
         satellite_catalogue = pd.DataFrame(columns=['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"])
@@ -546,8 +645,30 @@ class SingleShellFoV:
             if xsat > 0:
                 satellite_catalogue = self.compute_orbital_params_samples(satellite_catalogue, icoord, xsat, towards_north=False)
         return satellite_catalogue
-    
+
     def compute_orbital_params_samples(self, satellite_catalogue, icoord, xsat, towards_north=True):
+        """
+        Append one sampled satellite's orbital parameters to the catalogue.
+
+        Parameters
+        ----------
+        satellite_catalogue : pandas.DataFrame
+            Catalogue to append the new row to.
+        icoord : int
+            Index of the grid cell (within ``FoV_mask``) the satellite was
+            sampled at.
+        xsat : int
+            Number of satellites sampled at this grid cell (stored as the
+            row's ``N`` value).
+        towards_north : bool, optional
+            Whether the satellite is on a northward-moving branch of the
+            orbit. Default is True.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``satellite_catalogue`` with the new row prepended.
+        """
         # compute Omega and periapsis for each sample in the catalogue
         lonlambda = np.arcsin(np.tan(self.lat[icoord])/np.tan(self.i))
 
@@ -565,6 +686,65 @@ class SingleShellFoV:
     
     
 class MultiShellFoV:
+    """
+    Cached model for multiple orbital shells, sampled on a RA/Dec grid over
+    the field of view.
+
+    Large-FoV counterpart of ``MultiShellObs``: one ``SingleShellFoV``
+    instance is created internally for each row of the input shell
+    catalogue, sharing a common RA/Dec grid.
+
+    Parameters
+    ----------
+    obs : object
+        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``,
+        used to derive ``obsloc``/``pointing_ra``/``pointing_dec``.
+    shells_df : pandas.DataFrame
+        Table describing the orbital shells of the constellation.
+    ndec : int
+        Number of declination grid points.
+    nra : int
+        Number of right ascension grid points.
+    Lfov : astropy.units.Quantity
+        Effective telescope field of view. Must be angular.
+    t_mjd : astropy.time.Time
+        Observation time.
+
+    Attributes
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+    pointing_ra : astropy.units.Quantity
+        Telescope pointing right ascension.
+    pointing_dec : astropy.units.Quantity
+        Telescope pointing declination.
+    ra_grid : astropy.units.Quantity
+        Right ascension grid.
+    dec_grid : astropy.units.Quantity
+        Declination grid.
+    FoV_mask : numpy.ndarray
+        Boolean mask selecting grid points inside the field of view.
+    dOmega : astropy.units.Quantity
+        Solid angle element of each grid point inside the field of view.
+    shell_models : list[SingleShellFoV]
+        List of ``SingleShellFoV`` models, one per shell.
+    rho_sat : astropy.units.Quantity
+        Total projected satellite density summed over all shells.
+    nsats_per_shell : list
+        Expected number of satellites in the field of view for each shell.
+    total_nsats : astropy.units.Quantity
+        Total expected number of satellites in the field of view.
+
+    Methods
+    -------
+    sample_satellites(rng=None)
+        Draw a stochastic satellite catalogue from the analytical model.
+
+    Notes
+    -----
+    Parametrizes targets by true RA/Dec and an explicit MJD time, unlike
+    ``MultiShellObs``'s local-hour-angle convention.
+    """
     def __init__(self, obs, shells_df, ndec, nra, Lfov, t_mjd):
         self.obs = obs
         self.ndec = ndec
@@ -613,17 +793,42 @@ class MultiShellFoV:
 
     @cached_property
     def rho_sat(self):
+        """astropy.units.Quantity: Total projected satellite density summed
+        over all shells."""
         return sum(np.nan_to_num(shell_model.rho_sat) for shell_model in self.shell_models)
-    
+
     @cached_property
     def nsats_per_shell(self):
+        """list: Expected number of satellites in the field of view for
+        each shell."""
         return [shell_model.nsat_shell_obs.sum() for shell_model in self.shell_models]
-    
+
     @cached_property
     def total_nsats(self):
+        """astropy.units.Quantity: Total expected number of satellites in
+        the field of view."""
         return sum(self.nsats_per_shell)
-    
+
     def sample_satellites(self, rng=None):
+        """
+        Draw a stochastic satellite catalogue from the analytical model.
+
+        Combines the contributions from all orbital shells included in the
+        ``MultiShellFoV`` instance.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator, optional
+            Random number generator to draw samples from. If not given, a
+            non-reproducible generator is created.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per sampled satellite, with columns ``N``, ``i``, ``h``,
+            ``long_asc_node``, ``periapsis``, ``decstart``, ``rastart``,
+            ``tstart``, ``towards``, sorted by ``tstart``.
+        """
         satellite_catalogue = pd.DataFrame(columns=['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"])
         for shell_model in self.shell_models:
             satellite_catalogue = pd.concat([shell_model.sample_satellites(rng=rng), satellite_catalogue], ignore_index=True)
@@ -632,6 +837,91 @@ class MultiShellFoV:
     
 
 class SingleShellFlux:
+    """
+    Cached model for the flux of satellites of a single shell entering the
+    field of view, at a given observation time.
+
+    Unlike ``SingleShellFoV`` (which counts satellites over a filled RA/Dec
+    grid at one instant), this class evaluates the rate at which satellites
+    cross the field-of-view boundary circle, for use in time-stepped
+    simulations (see ``IntegralObsModel``).
+
+    Parameters
+    ----------
+    obs : object
+        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``.
+        Only used to derive ``obsloc``/``pointing_ra``/``pointing_dec`` when
+        those are not given directly.
+    shell : pandas.Series
+        Row of the shell catalogue describing a single orbital shell (same
+        ``"i"``/``"h"``/``"n"`` fields as ``SingleShellObs``).
+    Npoints : int, optional
+        Number of points sampled on the field-of-view boundary circle.
+        Required if ``circle_vecs``/``circle_ra``/``circle_dec`` are not
+        given.
+    Lfov : float, optional
+        Field of view diameter, in degrees. Required if ``circle_vecs``/
+        ``circle_ra``/``circle_dec`` are not given.
+    t_mjd : astropy.time.Time
+        Observation time.
+    t_init_mjd : astropy.time.Time
+        Reference observation time, used to compute the periapsis phase
+        offset at ``t_mjd``.
+    dt : astropy.units.Quantity
+        Time step used in the flux calculation.
+    obsloc : astropy.coordinates.EarthLocation, optional
+        Observer location. Overrides ``obs.ITRF`` if given.
+    pointing_ra : float, optional
+        Telescope pointing right ascension, in degrees. Overrides
+        ``obs.ra`` if given.
+    pointing_dec : float, optional
+        Telescope pointing declination, in degrees. Overrides ``obs.dec``
+        if given.
+    circle_vecs : numpy.ndarray, optional
+        Precomputed unit vectors of the field-of-view boundary points. If
+        given, ``circle_ra`` and ``circle_dec`` must also be given.
+    circle_ra : numpy.ndarray, optional
+        Precomputed right ascension of the boundary points, in radians.
+    circle_dec : numpy.ndarray, optional
+        Precomputed declination of the boundary points, in radians.
+
+    Attributes
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+    pointing_ra : float
+        Telescope pointing right ascension, in degrees.
+    pointing_dec : float
+        Telescope pointing declination, in degrees.
+    circle_vecs : numpy.ndarray
+        Unit vectors of the field-of-view boundary points.
+    circle_ra : astropy.units.Quantity
+        Right ascension of the boundary points, in radians.
+    circle_dec : astropy.units.Quantity
+        Declination of the boundary points, in radians.
+    i : astropy.units.Quantity
+        Orbital inclination in radians.
+    Nsat : int
+        Number of satellites in the shell.
+    hsat : astropy.units.Quantity
+        Shell altitude.
+    t_offset : astropy.units.Quantity
+        Elapsed time between ``t_init_mjd`` and ``t_mjd``.
+    rho_sat : astropy.units.Quantity
+        Projected satellite density for the shell.
+    shell_nsat_fluxes : tuple[astropy.units.Quantity, astropy.units.Quantity]
+        Flux of north- and south-moving satellites entering the field of
+        view at each boundary point.
+
+    Notes
+    -----
+    Parametrizes targets by true RA/Dec and an explicit MJD time, unlike
+    ``SingleShellObs``'s local-hour-angle convention.
+
+    Unlike ``SingleShellFoV``, ``pointing_ra``/``pointing_dec`` are stored
+    here as plain values in degrees, not Astropy quantities in radians —
+    the two WIP classes do not share a calling convention.
+    """
     def __init__(
         self,
         obs,
@@ -719,6 +1009,7 @@ class SingleShellFlux:
 
     @cached_property
     def rho_sat(self):
+        """astropy.units.Quantity: Projected satellite density for the shell."""
         return satellite_density(
             self.Nsat,
             self.lat,
@@ -730,6 +1021,11 @@ class SingleShellFlux:
 
     @cached_property
     def shell_nsat_fluxes(self):
+        """
+        tuple[astropy.units.Quantity, astropy.units.Quantity]: Flux of
+        north- and south-moving satellites entering the field of view at
+        each boundary point.
+        """
         V_N, V_S = compute_geocentric_vs(self.i, self.lat, self.lon, self.hsat)
 
         e_east0, e_north0, e_center = local_basis_at_radec(self.pointing_ra, self.pointing_dec)
@@ -753,7 +1049,22 @@ class SingleShellFlux:
         return self.rho_sat.squeeze()/2 * flux_N, self.rho_sat.squeeze()/2 * flux_S
     
     def sample_satellites(self, rng=None):
+        """
+        Draw a stochastic satellite catalogue for this shell.
 
+        Parameters
+        ----------
+        rng : numpy.random.Generator, optional
+            Random number generator to draw samples from. If not given, a
+            non-reproducible generator is created.
+
+        Returns
+        -------
+        satellite_catalogue : pandas.DataFrame
+            One row per sampled satellite, with columns ``N``, ``i``, ``h``,
+            ``long_asc_node``, ``periapsis``, ``decstart``, ``rastart``,
+            ``tstart``, ``towards``.
+        """
         rng = _make_rng(rng=rng)
 
         satellite_catalogue = pd.DataFrame(columns=['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"])
@@ -771,12 +1082,35 @@ class SingleShellFlux:
         return satellite_catalogue
     
     def compute_orbital_params_samples(self, satellite_catalogue, icoord, xsat, towards_north=True):
+        """
+        Append one sampled satellite's orbital parameters to the catalogue.
+
+        Parameters
+        ----------
+        satellite_catalogue : pandas.DataFrame
+            Catalogue to append the new row to.
+        icoord : int
+            Index of the boundary point the satellite was sampled at.
+        xsat : int
+            Number of satellites sampled at this boundary point (stored as
+            the row's ``N`` value).
+        towards_north : bool, optional
+            Whether the satellite is on a northward-moving branch of the
+            orbit. Default is True.
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``satellite_catalogue`` with the new row prepended. The
+            periapsis is phase-shifted by ``t_offset`` relative to
+            ``SingleShellFoV.compute_orbital_params_samples``.
+        """
         # compute Omega and periapsis for each sample in the catalogue
         lonlambda = np.arcsin(np.tan(self.lat[icoord])/np.tan(self.i))
 
         if towards_north:
             Omega = (self.lon[icoord] - lonlambda) #should be naturally in rad
-            periapsis = np.arccos(np.cos((lonlambda).to(u.rad))*np.cos(self.lat[icoord])).to(u.deg)*np.sign(self.lat[icoord])     
+            periapsis = np.arccos(np.cos((lonlambda).to(u.rad))*np.cos(self.lat[icoord])).to(u.deg)*np.sign(self.lat[icoord])
         else:
             Omega = (self.lon[icoord] + lonlambda) + np.pi*u.rad # in rad
             periapsis = np.pi*u.rad - np.arccos(np.cos((lonlambda).to(u.rad))*np.cos(self.lat[icoord])).to(u.deg)*np.sign(self.lat[icoord])
@@ -787,6 +1121,60 @@ class SingleShellFlux:
         return satellite_catalogue.sort_index()
 
 class MultiShellFlux:
+    """
+    Cached model for the flux of satellites of multiple shells entering the
+    field of view, at a given observation time.
+
+    One ``SingleShellFlux`` instance is created internally for each row of
+    the input shell catalogue, sharing a common field-of-view boundary
+    circle.
+
+    Parameters
+    ----------
+    obs : object
+        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``,
+        used to derive ``obsloc``/``pointing_ra``/``pointing_dec``.
+    shells_df : pandas.DataFrame
+        Table describing the orbital shells of the constellation.
+    Npoints : int
+        Number of points sampled on the field-of-view boundary circle.
+    Lfov : float
+        Field of view diameter, in degrees.
+    t_mjd : astropy.time.Time
+        Observation time.
+    t_init_mjd : astropy.time.Time
+        Reference observation time, used to compute the periapsis phase
+        offset at ``t_mjd``.
+    dt : astropy.units.Quantity
+        Time step used in the flux calculation.
+
+    Attributes
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+    pointing_ra : float
+        Telescope pointing right ascension, in degrees.
+    pointing_dec : float
+        Telescope pointing declination, in degrees.
+    circle_vecs : numpy.ndarray
+        Unit vectors of the field-of-view boundary points.
+    circle_ra : numpy.ndarray
+        Right ascension of the boundary points, in radians (unlike
+        ``SingleShellFlux.circle_ra``, stored as a plain array here, not an
+        Astropy quantity).
+    circle_dec : numpy.ndarray
+        Declination of the boundary points, in radians.
+    shell_models : list[SingleShellFlux]
+        List of ``SingleShellFlux`` models, one per shell.
+    shell_nsat_fluxes : tuple[astropy.units.Quantity, astropy.units.Quantity]
+        Flux of north- and south-moving satellites entering the field of
+        view, summed over all shells.
+
+    Notes
+    -----
+    Parametrizes targets by true RA/Dec and an explicit MJD time, unlike
+    ``MultiShellObs``'s local-hour-angle convention.
+    """
     def __init__(self, obs, shells_df, Npoints, Lfov, t_mjd, t_init_mjd, dt):
         self.obs = obs
         self.Npoints = Npoints
@@ -828,6 +1216,11 @@ class MultiShellFlux:
 
     @cached_property
     def shell_nsat_fluxes(self):
+        """
+        tuple[astropy.units.Quantity, astropy.units.Quantity]: Flux of
+        north- and south-moving satellites entering the field of view,
+        summed over all shells.
+        """
         flux_N = []
         flux_S = []
 
@@ -839,6 +1232,25 @@ class MultiShellFlux:
         return sum(flux_N), sum(flux_S)
 
     def sample_satellites(self, rng=None):
+        """
+        Draw a stochastic satellite catalogue from the analytical model.
+
+        Combines the contributions from all orbital shells included in the
+        ``MultiShellFlux`` instance.
+
+        Parameters
+        ----------
+        rng : numpy.random.Generator, optional
+            Random number generator to draw samples from. If not given, a
+            non-reproducible generator is created.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per sampled satellite, with columns ``N``, ``i``, ``h``,
+            ``long_asc_node``, ``periapsis``, ``decstart``, ``rastart``,
+            ``tstart``, ``towards``, sorted by ``tstart``.
+        """
         satellite_catalogue = pd.DataFrame(
             columns=[
                 "N",
@@ -862,6 +1274,56 @@ class MultiShellFlux:
         return satellite_catalogue.sort_values(by="tstart").reset_index(drop=True)
 
 class IntegralObsModel:
+    """
+    End-to-end stochastic satellite catalogue over an exposure, combining
+    an initial FoV snapshot with time-stepped flux sampling.
+
+    Draws an initial satellite catalogue over the field of view at
+    ``t_init_mjd`` (via ``MultiShellFoV``), then adds satellites entering
+    the field of view at each subsequent time step up to
+    ``t_init_mjd + t_exp_mjd`` (via ``MultiShellFlux``).
+
+    Parameters
+    ----------
+    obs : object
+        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``.
+    shells_df : pandas.DataFrame
+        Table describing the orbital shells of the constellation.
+    Lfov : astropy.units.Quantity
+        Field of view diameter. Passed through unmodified to both
+        ``MultiShellFoV`` and ``MultiShellFlux`` — see Notes.
+    t_exp_mjd : float
+        Total exposure duration, in days.
+    t_init_mjd : astropy.time.Time
+        Initial observation time.
+    ndec : int
+        Number of declination grid points for the initial FoV snapshot.
+    nra : int
+        Number of right ascension grid points for the initial FoV snapshot.
+    Npoints : int
+        Number of points sampled on the field-of-view boundary circle at
+        each time step.
+    dt : astropy.units.Quantity
+        Time step used in the flux calculation.
+
+    Attributes
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+    n_time_samples : int
+        Number of time steps sampled over the exposure.
+    initial_multi_shell_fov : MultiShellFoV
+        FoV snapshot model at ``t_init_mjd``.
+
+    Notes
+    -----
+    ``Lfov`` is passed unmodified to both ``MultiShellFoV`` (which expects
+    an Astropy quantity, converted internally via ``.to(u.rad)``) and
+    ``MultiShellFlux``/``SingleShellFlux`` (which expect a plain float in
+    degrees, per ``pointing_to_radec_circle``). These two expectations are
+    not obviously compatible with the same input value — this class has not
+    been exercised end to end, per its WIP status.
+    """
     def __init__(self, obs, shells_df, Lfov, t_exp_mjd, t_init_mjd, ndec, nra, Npoints, dt):
         self.obs = obs
         self.shells_df = shells_df
@@ -888,7 +1350,28 @@ class IntegralObsModel:
         )
 
     def sample_satellites(self, seed=None, rng=None):
+        """
+        Draw a stochastic satellite catalogue over the full exposure.
 
+        Parameters
+        ----------
+        seed : int, optional
+            Seed used to build a reproducible random number generator.
+            Mutually exclusive with ``rng``.
+        rng : numpy.random.Generator, optional
+            Pre-built random number generator to draw samples from.
+            Mutually exclusive with ``seed``. If neither is given, a
+            non-reproducible generator is created.
+
+        Returns
+        -------
+        pandas.DataFrame
+            One row per sampled satellite, combining the initial FoV
+            snapshot and all time-stepped flux samples, with columns
+            ``N``, ``i``, ``h``, ``long_asc_node``, ``periapsis``,
+            ``decstart``, ``rastart``, ``tstart``, ``towards``, sorted by
+            ``tstart``.
+        """
         rng = _make_rng(seed=seed, rng=rng)
 
         satellite_catalogue = self.initial_multi_shell_fov.sample_satellites(rng=rng)

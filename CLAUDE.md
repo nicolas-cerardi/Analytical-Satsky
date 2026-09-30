@@ -84,6 +84,9 @@ the one actually used by the README/docs — treat the free functions as legacy-
     `SingleShellFlux`, `MultiShellFlux`, `IntegralObsModel`) are deliberately **not** referenced in
     `api.md` — they have no docstrings yet, so a `:::` directive would render broken/empty. Add
     docstrings first if/when that path graduates out of WIP and gets added to the docs.
+  - None of the 6 source files under `analytical_satsky/` have a **module-level docstring** (only
+    `__init__.py` does) — not a priority now, but worth adding eventually so `help(module)` and doc
+    tooling have something to show when browsing by module rather than by symbol.
 - [docs/model.md](docs/model.md) documents the model's physical assumptions (circular orbits,
   constant Earth radius, straight-line/constant-velocity FoV integration) — read before changing
   any equation in model.py.

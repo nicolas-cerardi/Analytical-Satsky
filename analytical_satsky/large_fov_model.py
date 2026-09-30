@@ -10,10 +10,23 @@ w_earth = 1/86164.098903691 * 2 * np.pi * u.rad / u.s
 
 def local_basis_at_radec(ra_deg, dec_deg):
     """
-    Returns orthonormal basis at (ra, dec):
-      - e_east  : increasing RA direction
-      - e_north : increasing Dec direction
-      - e_los   : line of sight
+    Compute the local orthonormal tangent basis at a given sky position.
+
+    Parameters
+    ----------
+    ra_deg : float
+        Right ascension of the reference point, in degrees.
+    dec_deg : float
+        Declination of the reference point, in degrees.
+
+    Returns
+    -------
+    e_east : numpy.ndarray
+        Unit vector pointing in the direction of increasing RA, shape ``(3,)``.
+    e_north : numpy.ndarray
+        Unit vector pointing in the direction of increasing DEC, shape ``(3,)``.
+    e_los : numpy.ndarray
+        Unit vector along the LOS, towards the reference point, shape ``(3,)``.
     """
     ra = np.deg2rad(ra_deg)
     dec = np.deg2rad(dec_deg)
@@ -45,6 +58,21 @@ def local_basis_at_radec(ra_deg, dec_deg):
     return e_east, e_north, e_los
 
 def radec_to_unitvec(ra_deg, dec_deg):
+    """
+    Convert a sky position to a unit vector in ICRS coordinates.
+
+    Parameters
+    ----------
+    ra_deg : float
+        Right ascension, in degrees.
+    dec_deg : float
+        Declination, in degrees.
+
+    Returns
+    -------
+    numpy.ndarray
+        Unit vector towards ``(ra_deg, dec_deg)``, shape ``(3,)``.
+    """
     ra = np.deg2rad(ra_deg)
     dec = np.deg2rad(dec_deg)
     return np.array([
@@ -53,12 +81,31 @@ def radec_to_unitvec(ra_deg, dec_deg):
         np.sin(dec)
     ])
 
-def pointing_to_radec_circle(pointing_ra, pointing_dec, Lfov, Npoints=100, convention='westeast'):
+def pointing_to_radec_circle(pointing_ra, pointing_dec, Lfov, Npoints=100):
     """
-    Returns circle_vecs, circle_ra, circle_dec
-     - circle_vecs: shape (Npoints, 3) unit vectors of the circle points in ICRS coordinates
-     - circle_ra: shape (Npoints,) RA of the circle points in degrees
-     - circle_dec: shape (Npoints,) Dec of the circle points
+    Sample points on a circle of a given radius around a pointing direction.
+
+    Parameters
+    ----------
+    pointing_ra : float
+        Right ascension of the circle center, in degrees, ICRS.
+    pointing_dec : float
+        Declination of the circle center, in degrees, ICRS.
+    Lfov : float
+        Circle diameter, in degrees.
+    Npoints : int, optional
+        Number of points sampled on the circle. Default is 100.
+
+    Returns
+    -------
+    circle_vecs : numpy.ndarray
+        Unit vectors of the circle points, in ICRS coordinates, shape
+        ``(Npoints, 3)``.
+    circle_ra : numpy.ndarray
+        Right ascension of the circle points, in radians, shape
+        ``(Npoints,)``.
+    circle_dec : numpy.ndarray
+        Declination of the circle points, in radians, shape ``(Npoints,)``.
     """
     center = radec_to_unitvec(pointing_ra, pointing_dec)
     if np.abs(center[2]) < 0.9:
@@ -93,8 +140,25 @@ def pointing_to_radec_circle(pointing_ra, pointing_dec, Lfov, Npoints=100, conve
 
 def ICRS_to_CIRS(ra_icrs, dec_icrs, obstime, location):
     """
-    Converts ICRS coordinates to CIRS, including ERA correction, to be passed to the analytical model
-    All inputs and outputs are astropy quantities in rad
+    Convert ICRS coordinates to CIRS, ERA-corrected for use in the analytical model.
+
+    Parameters
+    ----------
+    ra_icrs : astropy.units.Quantity
+        Right ascension, ICRS. Must be angular.
+    dec_icrs : astropy.units.Quantity
+        Declination, ICRS. Must be angular.
+    obstime : astropy.time.Time
+        Observation time.
+    location : astropy.coordinates.EarthLocation
+        Observer location.
+
+    Returns
+    -------
+    lambda_cirs : astropy.units.Quantity
+        CIRS right ascension minus the Earth rotation angle, in radians.
+    dec_cirs : astropy.units.Quantity
+        Declination in the CIRS frame, in radians.
     """
     coords_icrs = SkyCoord(ra=ra_icrs, dec=dec_icrs, frame='icrs')
     coords_cirs = coords_icrs.transform_to(CIRS(obstime=obstime))
@@ -109,6 +173,21 @@ def ICRS_to_CIRS(ra_icrs, dec_icrs, obstime, location):
     return lambda_cirs, dec_cirs
 
 def unitvec_to_lonlat(vecs):
+    """
+    Convert unit vectors to longitude/latitude angles.
+
+    Parameters
+    ----------
+    vecs : numpy.ndarray
+        Unit vectors, shape ``(N, 3)``.
+
+    Returns
+    -------
+    lon : astropy.units.Quantity
+        Longitude, in radians, shape ``(N,)``.
+    lat : astropy.units.Quantity
+        Latitude, in radians, shape ``(N,)``.
+    """
     x = vecs[:, 0]
     y = vecs[:, 1]
     z = vecs[:, 2]
@@ -118,8 +197,41 @@ def unitvec_to_lonlat(vecs):
 
 def wsat_to_theta01r01(wsat, circle_vecs_cirs, obs_time, location, altaz_frame, dt_plot):
     """
-    Converts wsat at the circle points to the corresponding theta0, r0 (original position) and theta1, r1 (after small displacement) in the polar plot.
-    This is done by applying the small displacement given by wsat to the circle_vecs_cirs, then converting both the original and displaced vectors to altaz coordinates, and then to polar coordinates.
+    Convert apparent satellite velocities to polar-plot coordinates.
+
+    Displaces the circle points by ``wsat * dt_plot``, then converts both
+    the original and displaced positions to Alt/Az and then to polar
+    (theta, r) coordinates for plotting.
+
+    Parameters
+    ----------
+    wsat : astropy.units.Quantity
+        Apparent angular velocity vectors at the circle points, shape
+        ``(N, 3)``.
+    circle_vecs_cirs : array-like
+        Unit vectors of the circle points, in the CIRS frame, shape
+        ``(N, 3)``.
+    obs_time : astropy.time.Time
+        Observation time.
+    location : astropy.coordinates.EarthLocation
+        Observer location.
+    altaz_frame : astropy.coordinates.AltAz
+        Alt/Az frame to transform into.
+    dt_plot : astropy.units.Quantity
+        Small time step used to displace the circle points.
+
+    Returns
+    -------
+    theta0 : numpy.ndarray
+        Azimuth of the original position, in radians, shape ``(N,)``.
+    r0 : numpy.ndarray
+        Zenith distance of the original position, in degrees, shape
+        ``(N,)``.
+    theta1 : numpy.ndarray
+        Azimuth of the displaced position, in radians, shape ``(N,)``.
+    r1 : numpy.ndarray
+        Zenith distance of the displaced position, in degrees, shape
+        ``(N,)``.
     """
     # Original directions on the sphere
     b0 = np.asarray(circle_vecs_cirs, dtype=float)   # shape (N,3)
@@ -156,8 +268,34 @@ def wsat_to_theta01r01(wsat, circle_vecs_cirs, obs_time, location, altaz_frame, 
     return theta0, r0, theta1, r1
 
 def compute_d_lat_lon_gcrs(location, dec, ra, hsat, obstime):
-    '''equation is 
-    0 = d^2 + d 2 [z_CO sin(dec) + y_CO cos(dec) sin(ra) + x_CO cos(dec) cos(ra)] + ||CO||^2 - (R_earth+hsat)^2
+    '''
+    Compute the distance and satellite GCRS position along a line of sight.
+
+    Solves ``0 = d^2 + d 2 [z_CO sin(dec) + y_CO cos(dec) sin(ra) +
+    x_CO cos(dec) cos(ra)] + ||CO||^2 - (R_earth+hsat)^2`` for ``d``, the
+    distance from the observer to the shell along the line of sight.
+
+    Parameters
+    ----------
+    location : astropy.coordinates.EarthLocation
+        Observer location.
+    dec : astropy.units.Quantity
+        Declination of the line of sight, GCRS frame. Must be angular.
+    ra : astropy.units.Quantity
+        Right ascension of the line of sight, GCRS frame. Must be angular.
+    hsat : astropy.units.Quantity
+        Altitude of the shell.
+    obstime : astropy.time.Time
+        Observation time.
+
+    Returns
+    -------
+    d : astropy.units.Quantity
+        Distance from the observer to the shell along the line of sight.
+    sat_lat : astropy.units.Quantity
+        Satellite latitude, GCRS frame.
+    sat_lon : astropy.units.Quantity
+        Satellite longitude, GCRS frame.
     '''
     #1. compute obs location xyz in gcrs
     obs_xyz_gcrs = location.get_gcrs_posvel(obstime)[0].xyz.to(u.km)
@@ -177,6 +315,49 @@ def compute_d_lat_lon_gcrs(location, dec, ra, hsat, obstime):
     return d, sat_lat, sat_lon
 
 def compute_flux_vel(V_N, location, circle_dec, circle_ra, d, e_east0, e_north0, e_center, r_dot_E, r_dot_N, r_dot_C, tx, ty, obstime, dt):
+    """
+    Compute apparent velocity and satellite entry flux at FoV boundary points.
+
+    Parameters
+    ----------
+    V_N : astropy.units.Quantity
+        Geocentric velocity vectors of the satellites, shape ``(3, N)``.
+    location : astropy.coordinates.EarthLocation
+        Observer location.
+    circle_dec : array-like
+        Declination of the boundary points, in degrees, shape ``(N,)``.
+    circle_ra : array-like
+        Right ascension of the boundary points, in degrees, shape ``(N,)``.
+    d : astropy.units.Quantity
+        Distance from the observer to the shell at each boundary point,
+        shape ``(N,)``.
+    e_east0, e_north0, e_center : numpy.ndarray
+        Local tangent basis at the pointing center, each shape ``(3,)``.
+    r_dot_E, r_dot_N, r_dot_C : numpy.ndarray
+        Projections of the boundary unit vectors onto ``e_east0``,
+        ``e_north0``, ``e_center``, each shape ``(N,)``.
+    tx, ty : numpy.ndarray
+        Tangent vector components along the FoV boundary, each shape
+        ``(N,)``.
+    obstime : astropy.time.Time
+        Observation time.
+    dt : astropy.units.Quantity
+        Time step used to convert apparent angular velocity into a
+        displacement.
+
+    Returns
+    -------
+    w_sat : astropy.units.Quantity
+        Apparent angular velocity vectors at the boundary points, shape
+        ``(N, 3)``.
+    flux_vel : numpy.ndarray
+        Rate of satellites entering the field of view across the boundary,
+        shape ``(N,)``. Negative (exiting) contributions are clipped to
+        zero.
+    vx, vy : numpy.ndarray
+        Apparent velocity components in the tangent-plane projection, each
+        shape ``(N,)``.
+    """
     v_obs_gcrs = location.get_gcrs_posvel(obstime)[1].xyz #w_earth*const.R_earth*np.cos(obslat.to(u.rad))*np.array([-np.sin(obslon.to(u.rad)), np.cos(obslon.to(u.rad)), 0])
     
     topo_V_N = V_N - v_obs_gcrs[:,np.newaxis]
@@ -195,6 +376,44 @@ def compute_flux_vel(V_N, location, circle_dec, circle_ra, d, e_east0, e_north0,
     return w_sat_N.T, flux_vel, vx, vy
 
 def obs_and_shells_to_nsatflux(location, pointing_ra, pointing_dec, circle_vecs, circle_ra, circle_dec, i, Nsat, hsat, Lfov, obstime, Npoints=100, dt=1):
+    """
+    Compute the flux of satellites entering the FoV boundary, for one shell.
+
+    Parameters
+    ----------
+    location : astropy.coordinates.EarthLocation
+        Observer location.
+    pointing_ra, pointing_dec : float
+        Right ascension / declination of the pointing center, in degrees.
+    circle_vecs : numpy.ndarray
+        Unit vectors of the FoV boundary points, shape ``(Npoints, 3)``.
+    circle_ra, circle_dec : astropy.units.Quantity
+        Right ascension / declination of the boundary points. Must be
+        angular.
+    i : astropy.units.Quantity
+        Orbital inclination of the shell. Must be convertible to radians.
+    Nsat : float
+        Number of satellites in the shell.
+    hsat : astropy.units.Quantity
+        Altitude of the shell.
+    Lfov : float
+        Field of view diameter, in degrees.
+    obstime : astropy.time.Time
+        Observation time.
+    Npoints : int, optional
+        Number of points sampled on the FoV boundary. Default is 100.
+    dt : float or astropy.units.Quantity, optional
+        Time step used in the flux calculation. Default is 1.
+
+    Returns
+    -------
+    flux_N : numpy.ndarray
+        Flux of north-moving satellites entering the FoV boundary, shape
+        ``(Npoints,)``.
+    flux_S : numpy.ndarray
+        Flux of south-moving satellites entering the FoV boundary, shape
+        ``(Npoints,)``.
+    """
     d, sat_lat, sat_lon = compute_d_lat_lon_gcrs(location, circle_dec, circle_ra, hsat, obstime)
     cosalpha = compute_cosalpha(d, hsat)
     V_N, V_S = compute_geocentric_vs(i, sat_lat, sat_lon, hsat)
@@ -221,6 +440,39 @@ def obs_and_shells_to_nsatflux(location, pointing_ra, pointing_dec, circle_vecs,
     return  rho_sat/2 *flux_N, rho_sat/2 *flux_S
 
 def compute_orbital_parameters_gcrs(location, obstime, inclination, dec, ra, h_sat):
+    """
+    Compute the orbital parameters of satellites crossing a line of sight.
+
+    For a satellite shell of given inclination, computes the longitude of
+    ascending node and argument of periapsis of the northward- and
+    southward-moving orbits that cross the given line of sight.
+
+    Parameters
+    ----------
+    location : astropy.coordinates.EarthLocation
+        Observer location.
+    obstime : astropy.time.Time
+        Observation time.
+    inclination : astropy.units.Quantity
+        Orbital inclination of the shell. Must be convertible to radians.
+    dec : astropy.units.Quantity
+        Declination of the line of sight. Must be angular.
+    ra : astropy.units.Quantity
+        Right ascension of the line of sight. Must be angular.
+    h_sat : astropy.units.Quantity
+        Altitude of the shell.
+
+    Returns
+    -------
+    Omega_N : astropy.units.Quantity
+        Longitude of ascending node, northward-moving orbit, in radians.
+    Omega_S : astropy.units.Quantity
+        Longitude of ascending node, southward-moving orbit, in radians.
+    periapsis_N : astropy.units.Quantity
+        Argument of periapsis, northward-moving orbit, in degrees.
+    periapsis_S : astropy.units.Quantity
+        Argument of periapsis, southward-moving orbit, in degrees.
+    """
     _, satlat_gcrs, satlon_gcrs = compute_d_lat_lon_gcrs(location, dec, ra, h_sat, obstime)
     lonlambda = np.arcsin(np.tan(satlat_gcrs)/np.tan(inclination.to(u.rad))) #*u.rad
     
@@ -232,7 +484,24 @@ def compute_orbital_parameters_gcrs(location, obstime, inclination, dec, ra, h_s
 
 def angular_distance(ra1, dec1, ra2, dec2):
     """
-    ra1 dec1 are just scalars, ra2 and dec2 are arrays of the same shape, and the output is an array of the same shape as ra2 and dec2
+    Compute the angular distance between a reference point and a grid.
+
+    Parameters
+    ----------
+    ra1 : float
+        Right ascension of the reference point, in radians.
+    dec1 : float
+        Declination of the reference point, in radians.
+    ra2 : numpy.ndarray
+        Right ascension grid, in radians.
+    dec2 : numpy.ndarray
+        Declination grid, in radians.
+
+    Returns
+    -------
+    numpy.ndarray
+        Angular distance between ``(ra1, dec1)`` and each point of the
+        grid, in radians, same shape as ``ra2``/``dec2``.
     """
     x = np.cos(dec1) * np.sin(dec2) - np.sin(dec1) * np.cos(dec2) * np.cos(ra2 - ra1)
     y = np.cos(dec2) * np.sin(ra2 - ra1)
