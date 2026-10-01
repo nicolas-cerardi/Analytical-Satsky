@@ -76,19 +76,26 @@ custom_constellation = pd.DataFrame({
 })
 ```
 
-This custom constellation can then be passed directly to the model routines:
+This custom constellation can then be passed directly to `MultiShellObs`:
 
 ```python
-from analytical_satsky import compute_total_satellite_density
+from astropy.coordinates import EarthLocation
+import astropy.units as u
+from analytical_satsky import MultiShellObs
 
-result = compute_total_satellite_density(
+obsloc = EarthLocation.of_site("SKA-Mid")
+
+obs = MultiShellObs(
     obsloc=obsloc,
-    shells=custom_constellation,
-    target_ra=target_ra,
-    target_dec=target_dec,
-    beam_width=beam_width,
-    exposure_time=exposure_time,
+    shells_df=custom_constellation,
+    target_dec=-20.0 * u.deg,
+    target_lha=0.0 * u.deg,
+    Lfov=1.0 * u.deg,
+    tobs=1.0 * u.hour,
 )
+
+obs.total_nsats
+obs.nsats_per_shell
 ```
 
 ## Unit conventions

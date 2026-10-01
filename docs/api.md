@@ -8,7 +8,7 @@ from analytical_satsky import *
 
 ## Overview
 
-The public API is organized into four categories:
+The public API is organized into three categories:
 
 ### Constellation management
 
@@ -21,6 +21,14 @@ The public API is organized into four categories:
 * [`MultiShellObs`](#analytical_satsky.MultiShellObs)
 * [`compute_occupancy_fraction`](#analytical_satsky.compute_occupancy_fraction)
 
+### Large FoV model and satellite sampling
+
+* [`SingleShellFoV`](#analytical_satsky.SingleShellFoV)
+* [`MultiShellFoV`](#analytical_satsky.MultiShellFoV)
+* [`SingleShellFlux`](#analytical_satsky.SingleShellFlux)
+* [`MultiShellFlux`](#analytical_satsky.MultiShellFlux)
+* [`IntegralObsModel`](#analytical_satsky.IntegralObsModel)
+
 ### Visualisation
 
 * [`plot_sky_map`](#analytical_satsky.plot_sky_map)
@@ -31,25 +39,38 @@ The public API is organized into four categories:
 
 ::: analytical_satsky.list_constellations
 
-For more on constellations see the [constellation page](constellations.md).
-
 ::: analytical_satsky.load_constellation
 
 For more on constellations see the [constellation page](constellations.md).
 
 ---
+
+# Satellite density and occupancy modelling
+
 ::: analytical_satsky.SingleShellObs
+
+::: analytical_satsky.MultiShellObs
+
+::: analytical_satsky.compute_occupancy_fraction
 
 For information on the model assumptions see the [model page](model.md).
 
 ---
 
-::: analytical_satsky.MultiShellObs
+# Large FoV model and satellite sampling
 
-For information on the model assumptions see the [model page](model.md).
+This path parametrizes targets by true RA/Dec and an explicit observation time, instead of the
+local-hour-angle convention used above.
 
+::: analytical_satsky.SingleShellFoV
 
-::: analytical_satsky.compute_occupancy_fraction
+::: analytical_satsky.MultiShellFoV
+
+::: analytical_satsky.SingleShellFlux
+
+::: analytical_satsky.MultiShellFlux
+
+::: analytical_satsky.IntegralObsModel
 
 ---
 

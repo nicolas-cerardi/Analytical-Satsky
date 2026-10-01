@@ -18,6 +18,11 @@ from .plot_utils import (
 from .shell_obs import (
     SingleShellObs,
     MultiShellObs,
+    SingleShellFoV,
+    MultiShellFoV,
+    SingleShellFlux,
+    MultiShellFlux,
+    IntegralObsModel
 )
 
 __all__ = [
@@ -27,6 +32,11 @@ __all__ = [
     "plot_sky_map",
     "SingleShellObs",
     "MultiShellObs",
+    "SingleShellFoV",
+    "MultiShellFoV",
+    "SingleShellFlux",
+    "MultiShellFlux",
+    "IntegralObsModel"
 ]
 
 __version__ = "0.2.0"

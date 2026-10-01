@@ -21,12 +21,15 @@ This path parametrizes targets by **local hour angle** (`target_lha`), not RA, s
 drop time-dependence (shells are defined w.r.t. Earth's instantaneous rotation axis — see
 [docs/model.md](docs/model.md)).
 
-**In development, not exported, untested, undocumented**: `SingleShellFoV`, `MultiShellFoV`,
-`SingleShellFlux`, `MultiShellFlux`, `IntegralObsModel` in shell_obs.py, plus
-[large_fov_model.py](analytical_satsky/large_fov_model.py). This is the large-FoV / satellite-catalogue
-sampling path mentioned as "in development" in the README roadmap. It parametrizes targets by
-**true RA/Dec + an explicit MJD time** instead of LHA — a different coordinate convention from the
-stable path. Treat as WIP; don't assume test or doc coverage.
+**In development, now exported and documented, still untested**: `SingleShellFoV`, `MultiShellFoV`,
+`SingleShellFlux`, `MultiShellFlux`, `IntegralObsModel` in shell_obs.py are exported from
+`__init__.py` and documented with numpydoc docstrings, referenced in `docs/api.md`'s "Large FoV
+model and satellite sampling" section. [large_fov_model.py](analytical_satsky/large_fov_model.py)'s
+functions have docstrings too but are **not** yet referenced in `api.md`. This is the large-FoV /
+satellite-catalogue sampling path mentioned as "in development" in the README roadmap. It
+parametrizes targets by **true RA/Dec + an explicit MJD time** instead of LHA — a different
+coordinate convention from the stable path. Still has no test coverage and hasn't been exercised
+end-to-end — treat as WIP despite now being public.
 
 `model.py` also has a free-function version of the stable path's physics
 (`compute_shell_satellite_density`, `compute_total_satellite_density`, `simulate_exposed_time`) that
@@ -36,6 +39,15 @@ the one actually used by the README/docs — treat the free functions as legacy-
 `_legacy.py` is explicitly deprecated (see its own docstring); kept only because
 `tests/test_internal.py::test_exposure_fraction` checks it against the current
 `compute_occupancy_fraction` for equivalence.
+
+`ra_to_lha`/`get_highest_time` (model.py) are dead code, not exported, needs rework before reuse.
+They look at first glance like the missing "RA/Dec + observing time → `target_lha`" helper that
+`MultiShellObs`/`SingleShellObs` users would need (nothing in the docs/README currently explains how
+to derive `target_lha` from a real target position) — but verified empirically that `ra_to_lha`
+doesn't take an observation time at all: it internally searches a hardcoded 1-day window for the
+target's moment of peak altitude (`get_highest_time`) and returns the LHA at that moment, which is
+~0° by definition of transit regardless of input RA/Dec. Don't document or export as-is; needs
+reworking (e.g. take an explicit `obstime` and drop the transit search) before it can fill that gap.
 
 ## Unit conventions
 
@@ -80,10 +92,11 @@ the one actually used by the README/docs — treat the free functions as legacy-
     setting — `dev_version2` had to be added there explicitly before the first deploy would succeed.
     If the trigger branch changes (e.g. to `main`) or a new environment gets created, check this
     setting again.
-  - `large_fov_model.py` and the WIP `shell_obs.py` classes (`SingleShellFoV`, `MultiShellFoV`,
-    `SingleShellFlux`, `MultiShellFlux`, `IntegralObsModel`) are deliberately **not** referenced in
-    `api.md` — they have no docstrings yet, so a `:::` directive would render broken/empty. Add
-    docstrings first if/when that path graduates out of WIP and gets added to the docs.
+  - The 5 WIP `shell_obs.py` classes (`SingleShellFoV`, `MultiShellFoV`, `SingleShellFlux`,
+    `MultiShellFlux`, `IntegralObsModel`) are now referenced in `api.md`'s "Large FoV model and
+    satellite sampling" section. `large_fov_model.py`'s functions are documented but still **not**
+    referenced in `api.md` — add `:::` directives for them there if/when that file's functions
+    graduate too.
   - None of the 6 source files under `analytical_satsky/` have a **module-level docstring** (only
     `__init__.py` does) — not a priority now, but worth adding eventually so `help(module)` and doc
     tooling have something to show when browsing by module rather than by symbol.

@@ -4,7 +4,7 @@ import astropy.units as u
 import astropy.constants as const
 from astropy.coordinates import CIRS, SkyCoord
 
-from analytical_satsky.model import compute_cosalpha, compute_geocentric_vs, satellite_density, compute_apparent_v
+from analytical_satsky.model import compute_apparent_v
 
 w_earth = 1/86164.098903691 * 2 * np.pi * u.rad / u.s
 
@@ -374,113 +374,6 @@ def compute_flux_vel(V_N, location, circle_dec, circle_ra, d, e_east0, e_north0,
     flux_vel = np.where(flux_vel > 0.0, flux_vel, 0.0)
     
     return w_sat_N.T, flux_vel, vx, vy
-
-def obs_and_shells_to_nsatflux(location, pointing_ra, pointing_dec, circle_vecs, circle_ra, circle_dec, i, Nsat, hsat, Lfov, obstime, Npoints=100, dt=1):
-    """
-    Compute the flux of satellites entering the FoV boundary, for one shell.
-
-    Parameters
-    ----------
-    location : astropy.coordinates.EarthLocation
-        Observer location.
-    pointing_ra, pointing_dec : float
-        Right ascension / declination of the pointing center, in degrees.
-    circle_vecs : numpy.ndarray
-        Unit vectors of the FoV boundary points, shape ``(Npoints, 3)``.
-    circle_ra, circle_dec : astropy.units.Quantity
-        Right ascension / declination of the boundary points. Must be
-        angular.
-    i : astropy.units.Quantity
-        Orbital inclination of the shell. Must be convertible to radians.
-    Nsat : float
-        Number of satellites in the shell.
-    hsat : astropy.units.Quantity
-        Altitude of the shell.
-    Lfov : float
-        Field of view diameter, in degrees.
-    obstime : astropy.time.Time
-        Observation time.
-    Npoints : int, optional
-        Number of points sampled on the FoV boundary. Default is 100.
-    dt : float or astropy.units.Quantity, optional
-        Time step used in the flux calculation. Default is 1.
-
-    Returns
-    -------
-    flux_N : numpy.ndarray
-        Flux of north-moving satellites entering the FoV boundary, shape
-        ``(Npoints,)``.
-    flux_S : numpy.ndarray
-        Flux of south-moving satellites entering the FoV boundary, shape
-        ``(Npoints,)``.
-    """
-    d, sat_lat, sat_lon = compute_d_lat_lon_gcrs(location, circle_dec, circle_ra, hsat, obstime)
-    cosalpha = compute_cosalpha(d, hsat)
-    V_N, V_S = compute_geocentric_vs(i, sat_lat, sat_lon, hsat)
-    rho_sat = satellite_density(Nsat, sat_lat, i, hsat, d.to(u.km), cosalpha).squeeze()
-    
-    e_east0, e_north0, e_center = local_basis_at_radec(pointing_ra, pointing_dec)
-    den = circle_vecs @ e_center
-    x = (circle_vecs @ e_east0) / den
-    y = (circle_vecs @ e_north0) / den
-    dl_norm = np.deg2rad(Lfov / 2.0) * u.rad * 2.0 * np.pi / Npoints # boundary angular element length [rad]
-    r_dot_E = circle_vecs @ e_east0
-    r_dot_N = circle_vecs @ e_north0
-    r_dot_C = circle_vecs @ e_center
-    tx = np.roll(x, -1) - np.roll(x, 1)
-    ty = np.roll(y, -1) - np.roll(y, 1)
-    tnorm = np.hypot(tx, ty)
-    tx = dl_norm * tx / tnorm
-    ty = dl_norm * ty / tnorm
-    # Keep only entering contributions
-    _, flux_N, _, _ = compute_flux_vel(V_N, location, circle_dec.to(u.deg).value, circle_ra.to(u.deg).value, d, 
-                              e_east0, e_north0, e_center, r_dot_E, r_dot_N, r_dot_C, tx, ty, obstime, dt)
-    _, flux_S, _, _ = compute_flux_vel(V_S, location, circle_dec.to(u.deg).value, circle_ra.to(u.deg).value, d,
-                              e_east0, e_north0, e_center, r_dot_E, r_dot_N, r_dot_C, tx, ty, obstime, dt)
-    return  rho_sat/2 *flux_N, rho_sat/2 *flux_S
-
-def compute_orbital_parameters_gcrs(location, obstime, inclination, dec, ra, h_sat):
-    """
-    Compute the orbital parameters of satellites crossing a line of sight.
-
-    For a satellite shell of given inclination, computes the longitude of
-    ascending node and argument of periapsis of the northward- and
-    southward-moving orbits that cross the given line of sight.
-
-    Parameters
-    ----------
-    location : astropy.coordinates.EarthLocation
-        Observer location.
-    obstime : astropy.time.Time
-        Observation time.
-    inclination : astropy.units.Quantity
-        Orbital inclination of the shell. Must be convertible to radians.
-    dec : astropy.units.Quantity
-        Declination of the line of sight. Must be angular.
-    ra : astropy.units.Quantity
-        Right ascension of the line of sight. Must be angular.
-    h_sat : astropy.units.Quantity
-        Altitude of the shell.
-
-    Returns
-    -------
-    Omega_N : astropy.units.Quantity
-        Longitude of ascending node, northward-moving orbit, in radians.
-    Omega_S : astropy.units.Quantity
-        Longitude of ascending node, southward-moving orbit, in radians.
-    periapsis_N : astropy.units.Quantity
-        Argument of periapsis, northward-moving orbit, in degrees.
-    periapsis_S : astropy.units.Quantity
-        Argument of periapsis, southward-moving orbit, in degrees.
-    """
-    _, satlat_gcrs, satlon_gcrs = compute_d_lat_lon_gcrs(location, dec, ra, h_sat, obstime)
-    lonlambda = np.arcsin(np.tan(satlat_gcrs)/np.tan(inclination.to(u.rad))) #*u.rad
-    
-    Omega_N = (satlon_gcrs.to(u.rad) - lonlambda).to(u.rad) # in rad
-    Omega_S = (satlon_gcrs.to(u.rad) + lonlambda).to(u.rad) + np.pi*u.rad # in rad
-    periapsis_N = np.arccos(np.cos((lonlambda).to(u.rad))*np.cos(satlat_gcrs)).to(u.deg)*np.sign(satlat_gcrs)
-    periapsis_S = np.pi*u.rad - np.arccos(np.cos((lonlambda).to(u.rad))*np.cos(satlat_gcrs)).to(u.deg)*np.sign(satlat_gcrs) #+ np.pi*u.rad
-    return Omega_N, Omega_S, periapsis_N, periapsis_S
 
 def angular_distance(ra1, dec1, ra2, dec2):
     """
