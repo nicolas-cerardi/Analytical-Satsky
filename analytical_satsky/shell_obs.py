@@ -698,6 +698,7 @@ class MultiShellFoV:
     ----------
     obs : object
         Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``,
+        such as a ``tabsim.dask.observation.Observation`` instance. Only
         used to derive ``obsloc``/``pointing_ra``/``pointing_dec``.
     shells_df : pandas.DataFrame
         Table describing the orbital shells of the constellation.
@@ -859,9 +860,9 @@ class SingleShellFlux:
         Number of points sampled on the field-of-view boundary circle.
         Required if ``circle_vecs``/``circle_ra``/``circle_dec`` are not
         given.
-    Lfov : float, optional
-        Field of view diameter, in degrees. Required if ``circle_vecs``/
-        ``circle_ra``/``circle_dec`` are not given.
+    Lfov : astropy.units.Quantity, optional
+        Field of view diameter. Must be angular. Required if
+        ``circle_vecs``/``circle_ra``/``circle_dec`` are not given.
     t_mjd : astropy.time.Time
         Observation time.
     t_init_mjd : astropy.time.Time
@@ -953,7 +954,7 @@ class SingleShellFlux:
 
         
         self.Npoints = Npoints
-        self.Lfov = Lfov #be sure that this is in radians
+        self.Lfov = Lfov.to(u.rad) if Lfov is not None else None
 
         if circle_vecs is None or circle_ra is None or circle_dec is None:
             if Npoints is None or Lfov is None:
@@ -964,7 +965,7 @@ class SingleShellFlux:
             circle_vecs, circle_ra, circle_dec = pointing_to_radec_circle(
                 self.pointing_ra,
                 self.pointing_dec,
-                self.Lfov,
+                self.Lfov.to_value(u.deg),
                 Npoints=self.Npoints,
             )
         
@@ -1138,8 +1139,8 @@ class MultiShellFlux:
         Table describing the orbital shells of the constellation.
     Npoints : int
         Number of points sampled on the field-of-view boundary circle.
-    Lfov : float
-        Field of view diameter, in degrees.
+    Lfov : astropy.units.Quantity
+        Field of view diameter. Must be angular.
     t_mjd : astropy.time.Time
         Observation time.
     t_init_mjd : astropy.time.Time
@@ -1178,7 +1179,7 @@ class MultiShellFlux:
     def __init__(self, obs, shells_df, Npoints, Lfov, t_mjd, t_init_mjd, dt):
         self.obs = obs
         self.Npoints = Npoints
-        self.Lfov = Lfov
+        self.Lfov = Lfov.to(u.rad)
         self.t_mjd = t_mjd
         self.t_init_mjd = t_init_mjd
         self.dt = dt
@@ -1191,7 +1192,7 @@ class MultiShellFlux:
         self.circle_vecs, self.circle_ra, self.circle_dec = pointing_to_radec_circle(
             self.pointing_ra,
             self.pointing_dec,
-            self.Lfov,
+            self.Lfov.to_value(u.deg),
             Npoints=self.Npoints,
         )
 
@@ -1200,7 +1201,7 @@ class MultiShellFlux:
                 obs=obs,
                 shell=shell,
                 Npoints=Npoints,
-                Lfov=Lfov,
+                Lfov=self.Lfov,
                 t_mjd=t_mjd,
                 t_init_mjd=t_init_mjd,
                 dt=dt,
@@ -1290,8 +1291,9 @@ class IntegralObsModel:
     shells_df : pandas.DataFrame
         Table describing the orbital shells of the constellation.
     Lfov : astropy.units.Quantity
-        Field of view diameter. Passed through unmodified to both
-        ``MultiShellFoV`` and ``MultiShellFlux`` — see Notes.
+        Field of view diameter. Must be angular. Passed through to both
+        ``MultiShellFoV`` and ``MultiShellFlux``, which both convert it via
+        ``.to(u.rad)``.
     t_exp_mjd : float
         Total exposure duration, in days.
     t_init_mjd : astropy.time.Time
@@ -1317,17 +1319,15 @@ class IntegralObsModel:
 
     Notes
     -----
-    ``Lfov`` is passed unmodified to both ``MultiShellFoV`` (which expects
-    an Astropy quantity, converted internally via ``.to(u.rad)``) and
-    ``MultiShellFlux``/``SingleShellFlux`` (which expect a plain float in
-    degrees, per ``pointing_to_radec_circle``). These two expectations are
-    not obviously compatible with the same input value — this class has not
-    been exercised end to end, per its WIP status.
+    ``Lfov`` must be an angular Astropy quantity; ``MultiShellFoV`` and
+    ``MultiShellFlux``/``SingleShellFlux`` all convert it internally via
+    ``.to(u.rad)``, and convert back to a plain degree float only at the
+    point of calling ``pointing_to_radec_circle``.
     """
     def __init__(self, obs, shells_df, Lfov, t_exp_mjd, t_init_mjd, ndec, nra, Npoints, dt):
         self.obs = obs
         self.shells_df = shells_df
-        self.Lfov = Lfov #be sure that this is in radians
+        self.Lfov = Lfov.to(u.rad)
         self.t_exp_mjd = t_exp_mjd
         self.t_init_mjd = t_init_mjd
         self.ndec = ndec
