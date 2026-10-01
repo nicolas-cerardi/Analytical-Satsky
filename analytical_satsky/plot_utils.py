@@ -10,6 +10,9 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 
+from analytical_satsky.large_fov_model import local_basis_at_radec, satellite_positions_gcrs, positions_to_lm
+from analytical_satsky.shell_obs import MultiShellFlux
+
 
 def plot_sky_map(
     sky_map: Quantity,
@@ -109,7 +112,108 @@ def plot_sky_map(
 
     cbar_ax = fig.add_axes([0.95, 0.1, 0.04, 0.8])  # [left, bottom, width, height]
     cbar = fig.colorbar(c, cax=cbar_ax, label='nsats / h')
-    
+
+    plt.show()
+    if return_fig:
+        return fig, ax
+    return
+
+
+def plot_satellite_tracks_lm(
+    integral_obs_model,
+    satellite_catalogue,
+    n_t: int = 500,
+    fov_lm_deg: float = 10.0,
+    ax: Optional[Axes] = None,
+    return_fig: bool = False,
+) -> Optional[tuple[Figure, Axes]]:
+    """
+    Plot sampled satellite tracks in the l,m plane around the pointing center.
+
+    Propagates each satellite in ``satellite_catalogue`` over the exposure
+    covered by ``integral_obs_model``, and projects its position into l,m
+    direction cosines (flat-sky approximation) as seen from the moving
+    observer, together with the field-of-view boundary at the initial
+    observation time.
+
+    Parameters
+    ----------
+    integral_obs_model : analytical_satsky.shell_obs.IntegralObsModel
+        Model used to generate ``satellite_catalogue``. Supplies the
+        observer location, pointing, field of view, and exposure duration.
+    satellite_catalogue : pandas.DataFrame
+        Satellite catalogue, as returned by
+        ``integral_obs_model.sample_satellites()``.
+    n_t : int, optional
+        Number of time samples used to propagate each satellite's track.
+        Default is 500.
+    fov_lm_deg : float, optional
+        Full width/height of the plotted field, in degrees. Default is 10.0.
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on. If not given, a new figure and axes are created.
+    return_fig : bool, optional
+        If True, return the Matplotlib figure and axes. Default is False.
+
+    Returns
+    -------
+    tuple[matplotlib.figure.Figure, matplotlib.axes.Axes] or None
+        Figure and axes if ``return_fig`` is True, otherwise None.
+
+    Notes
+    -----
+    Points on the far/antipodal hemisphere from the pointing center (where
+    the direction cosines ``l``/``m`` alone can't distinguish a genuine
+    nearby crossing from one on the opposite side of the sky) are masked out
+    of the plotted tracks.
+    """
+    nsat = len(satellite_catalogue)
+    t_array_s = np.linspace(0, integral_obs_model.t_exp_mjd * 86400, n_t)
+
+    pointing_ra_deg = integral_obs_model.initial_multi_shell_fov.pointing_ra.to_value(u.deg)
+    pointing_dec_deg = integral_obs_model.initial_multi_shell_fov.pointing_dec.to_value(u.deg)
+    e_east0, e_north0, e_center0 = local_basis_at_radec(pointing_ra_deg, pointing_dec_deg)
+
+    # FoV boundary at the initial observation time, built the same way
+    # IntegralObsModel.sample_satellites builds it internally.
+    multi_shell_flux_t0 = MultiShellFlux(
+        obs=integral_obs_model.obs,
+        shells_df=integral_obs_model.shells_df,
+        Npoints=integral_obs_model.Npoints,
+        Lfov=integral_obs_model.Lfov,
+        t_mjd=integral_obs_model.t_init_mjd,
+        t_init_mjd=integral_obs_model.t_init_mjd,
+        dt=integral_obs_model.dt,
+    )
+    circle_l_deg = np.rad2deg(multi_shell_flux_t0.circle_vecs @ e_east0)
+    circle_m_deg = np.rad2deg(multi_shell_flux_t0.circle_vecs @ e_north0)
+    circle_l_deg = np.append(circle_l_deg, circle_l_deg[0])
+    circle_m_deg = np.append(circle_m_deg, circle_m_deg[0])
+
+    positions_gcrs = satellite_positions_gcrs(satellite_catalogue, t_array_s)
+    obs_times = integral_obs_model.t_init_mjd + t_array_s * u.s
+    l_traj_deg, m_traj_deg, n_traj = positions_to_lm(
+        positions_gcrs, integral_obs_model.obsloc, obs_times, e_east0, e_north0, e_center0
+    )
+    l_traj_deg = np.where(n_traj > 0, l_traj_deg, np.nan)
+    m_traj_deg = np.where(n_traj > 0, m_traj_deg, np.nan)
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(6, 6))
+    else:
+        fig = ax.figure
+
+    ax.plot(circle_l_deg, circle_m_deg, linestyle='--', color='gray', label='FoV boundary')
+    for isat in range(nsat):
+        ax.plot(l_traj_deg[isat], m_traj_deg[isat], lw=1)
+    ax.plot(0, 0, marker='+', color='red', markersize=15, markeredgewidth=2, label='pointing center')
+    ax.set_xlim(fov_lm_deg / 2, -fov_lm_deg / 2)  # east to the left, as on-sky convention
+    ax.set_ylim(-fov_lm_deg / 2, fov_lm_deg / 2)
+    ax.set_xlabel('l [deg] (east-west)')
+    ax.set_ylabel('m [deg] (north-south)')
+    ax.set_title('Satellite tracks in the l,m plane')
+    ax.set_aspect('equal')
+    ax.legend()
+
     plt.show()
     if return_fig:
         return fig, ax

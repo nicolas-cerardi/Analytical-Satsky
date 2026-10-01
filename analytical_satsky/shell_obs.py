@@ -830,9 +830,14 @@ class MultiShellFoV:
             ``long_asc_node``, ``periapsis``, ``decstart``, ``rastart``,
             ``tstart``, ``towards``, sorted by ``tstart``.
         """
-        satellite_catalogue = pd.DataFrame(columns=['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"])
-        for shell_model in self.shell_models:
-            satellite_catalogue = pd.concat([shell_model.sample_satellites(rng=rng), satellite_catalogue], ignore_index=True)
+        columns = ['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"]
+        frames = [
+            shell_model.sample_satellites(rng=rng) for shell_model in self.shell_models
+        ]
+        frames = [frame for frame in frames if not frame.empty]
+        satellite_catalogue = (
+            pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns)
+        )
         return satellite_catalogue.sort_values(by="tstart").reset_index(drop=True)
     
     
@@ -1252,25 +1257,24 @@ class MultiShellFlux:
             ``long_asc_node``, ``periapsis``, ``decstart``, ``rastart``,
             ``tstart``, ``towards``, sorted by ``tstart``.
         """
-        satellite_catalogue = pd.DataFrame(
-            columns=[
-                "N",
-                "i",
-                "h",
-                "long_asc_node",
-                "periapsis",
-                "decstart",
-                "rastart",
-                "tstart",
-                "towards",
-            ]
+        columns = [
+            "N",
+            "i",
+            "h",
+            "long_asc_node",
+            "periapsis",
+            "decstart",
+            "rastart",
+            "tstart",
+            "towards",
+        ]
+        frames = [
+            shell_model.sample_satellites(rng=rng) for shell_model in self.shell_models
+        ]
+        frames = [frame for frame in frames if not frame.empty]
+        satellite_catalogue = (
+            pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns)
         )
-
-        for shell_model in self.shell_models:
-            satellite_catalogue = pd.concat(
-                [shell_model.sample_satellites(rng=rng), satellite_catalogue],
-                ignore_index=True,
-            )
 
         return satellite_catalogue.sort_values(by="tstart").reset_index(drop=True)
 
@@ -1374,10 +1378,10 @@ class IntegralObsModel:
         """
         rng = _make_rng(seed=seed, rng=rng)
 
-        satellite_catalogue = self.initial_multi_shell_fov.sample_satellites(rng=rng)
-        
-        #2: Sample satellites from MultiShellFlux models at each timesteps
+        columns = ['N', 'i', 'h', 'long_asc_node', 'periapsis', "decstart", "rastart", "tstart", "towards"]
+        frames = [self.initial_multi_shell_fov.sample_satellites(rng=rng)]
 
+        #2: Sample satellites from MultiShellFlux models at each timesteps
 
         for t in np.linspace(self.t_init_mjd, self.t_init_mjd+self.t_exp_mjd*u.day, self.n_time_samples):
 
@@ -1393,10 +1397,12 @@ class IntegralObsModel:
                 dt=self.dt
             )
 
-            catalogue_flux = multi_shell_flux.sample_satellites(rng=rng)
+            frames.append(multi_shell_flux.sample_satellites(rng=rng))
 
-            satellite_catalogue = pd.concat([satellite_catalogue, catalogue_flux], ignore_index=True)
-        
+        frames = [frame for frame in frames if not frame.empty]
+        satellite_catalogue = (
+            pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=columns)
+        )
         return satellite_catalogue.sort_values(by="tstart").reset_index(drop=True)
 
 

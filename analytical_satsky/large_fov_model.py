@@ -400,3 +400,109 @@ def angular_distance(ra1, dec1, ra2, dec2):
     y = np.cos(dec2) * np.sin(ra2 - ra1)
     z = np.sin(dec1) * np.sin(dec2) + np.cos(dec1) * np.cos(dec2) * np.cos(ra2 - ra1)
     return np.arctan2(np.sqrt(x**2 + y**2), z)
+
+def satellite_positions_gcrs(satellite_catalogue, t_array_s):
+    """
+    Propagate a sampled satellite catalogue to GCRS positions over time.
+
+    Builds each satellite's circular-orbit trajectory from its orbital
+    elements, using the periapsis then inclination then longitude-of-
+    ascending-node rotation sequence (true anomaly measured from periapsis
+    as ``omega_orbit * t_array_s``, matching the phase convention used by
+    ``SingleShellFoV``/``SingleShellFlux``'s ``compute_orbital_params_samples``).
+
+    Parameters
+    ----------
+    satellite_catalogue : pandas.DataFrame
+        Satellite catalogue as returned by ``IntegralObsModel.sample_satellites``
+        (or any of the other ``sample_satellites`` methods in ``shell_obs.py``).
+        Must have columns ``i``, ``h``, ``long_asc_node``, ``periapsis``, all
+        plain floats (degrees for angles, km for altitude).
+    t_array_s : numpy.ndarray
+        Times at which to evaluate each satellite's position, in seconds
+        since the catalogue's reference time (``t_init_mjd``), shape
+        ``(n_t,)``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Satellite positions in the GCRS frame, in km, shape
+        ``(nsat, 3, n_t)``.
+    """
+    nsat = len(satellite_catalogue)
+    n_t = len(t_array_s)
+
+    R_earth_km = const.R_earth.to_value(u.km)
+    GM_earth_km3_s2 = const.GM_earth.to_value(u.km**3 / u.s**2)
+
+    h_km = satellite_catalogue['h'].values.astype(float)
+    R_orbit_km = R_earth_km + h_km
+    omega_orbit = np.sqrt(GM_earth_km3_s2 / R_orbit_km**3)
+
+    i_rad = np.deg2rad(satellite_catalogue['i'].values.astype(float))
+    Omega_rad = np.deg2rad(satellite_catalogue['long_asc_node'].values.astype(float))
+    periapsis_rad = np.deg2rad(satellite_catalogue['periapsis'].values.astype(float))
+
+    nu = omega_orbit[:, None] * t_array_s[None, :]  # (nsat, n_t), rad
+
+    r_perifocal = np.stack([
+        R_orbit_km[:, None] * np.cos(nu),
+        R_orbit_km[:, None] * np.sin(nu),
+        np.zeros((nsat, n_t)),
+    ], axis=1)  # (nsat, 3, n_t), km
+
+    def _rot_z(theta):
+        c, s, z, o = np.cos(theta), np.sin(theta), np.zeros_like(theta), np.ones_like(theta)
+        return np.stack([
+            np.stack([c, -s, z], axis=-1),
+            np.stack([s,  c, z], axis=-1),
+            np.stack([z,  z, o], axis=-1),
+        ], axis=-2)  # (..., 3, 3)
+
+    def _rot_x(theta):
+        c, s, z, o = np.cos(theta), np.sin(theta), np.zeros_like(theta), np.ones_like(theta)
+        return np.stack([
+            np.stack([o, z,  z], axis=-1),
+            np.stack([z, c, -s], axis=-1),
+            np.stack([z, s,  c], axis=-1),
+        ], axis=-2)  # (..., 3, 3)
+
+    R_total = _rot_z(Omega_rad) @ _rot_x(i_rad) @ _rot_z(periapsis_rad)  # (nsat, 3, 3)
+    return np.einsum('sij,sjt->sit', R_total, r_perifocal)
+
+def positions_to_lm(positions_gcrs, obsloc, times, e_east, e_north, e_center):
+    """
+    Project GCRS positions into l,m direction cosines from a moving observer.
+
+    Parameters
+    ----------
+    positions_gcrs : numpy.ndarray
+        Positions in the GCRS frame, in km, shape ``(nsat, 3, n_t)``.
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+    times : astropy.time.Time
+        Observation times, shape ``(n_t,)``, matching ``positions_gcrs``'s
+        last axis.
+    e_east, e_north, e_center : numpy.ndarray
+        Local tangent basis at the pointing center (see
+        ``local_basis_at_radec``), each shape ``(3,)``.
+
+    Returns
+    -------
+    l_deg, m_deg : numpy.ndarray
+        East-west / north-south direction cosines, in degrees (flat-sky
+        approximation), shape ``(nsat, n_t)``.
+    n : numpy.ndarray
+        Third direction-cosine component, shape ``(nsat, n_t)``. Negative
+        values mean the position is on the far/antipodal hemisphere from
+        the pointing center, where ``l``/``m`` alone can't distinguish it
+        from a genuine nearby crossing.
+    """
+    obs_pos_gcrs = obsloc.get_gcrs_posvel(times)[0].xyz.to_value(u.km)  # (3, n_t)
+    rel = positions_gcrs - obs_pos_gcrs[None, :, :]
+    rel_unit = rel / np.linalg.norm(rel, axis=1, keepdims=True)
+
+    l_deg = np.rad2deg(np.einsum('sit,i->st', rel_unit, e_east))
+    m_deg = np.rad2deg(np.einsum('sit,i->st', rel_unit, e_north))
+    n = np.einsum('sit,i->st', rel_unit, e_center)
+    return l_deg, m_deg, n
