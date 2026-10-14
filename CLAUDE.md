@@ -21,20 +21,26 @@ This path parametrizes targets by **local hour angle** (`target_lha`), not RA, s
 drop time-dependence (shells are defined w.r.t. Earth's instantaneous rotation axis — see
 [docs/model.md](docs/model.md)).
 
-**In development, now exported and documented, still untested**: `SingleShellFoV`, `MultiShellFoV`,
+**In development, now exported, documented, and partially tested**: `SingleShellFoV`, `MultiShellFoV`,
 `SingleShellFlux`, `MultiShellFlux`, `IntegralObsModel` in shell_obs.py are exported from
 `__init__.py` and documented with numpydoc docstrings, referenced in `docs/api.md`'s "Large FoV
 model and satellite sampling" section. [large_fov_model.py](analytical_satsky/large_fov_model.py)'s
-functions have docstrings too but are **not** yet referenced in `api.md`. This is the large-FoV /
+functions have docstrings too but are **not** yet referenced in `api.md`; this includes
+`satellite_positions_gcrs` and `positions_to_lm`, added to support
+[notebooks/satellite_sampling.ipynb](notebooks/satellite_sampling.ipynb) and
+`plot_utils.py`'s `plot_satellite_tracks_lm`. This is the large-FoV /
 satellite-catalogue sampling path mentioned as "in development" in the README roadmap. It
 parametrizes targets by **true RA/Dec + an explicit MJD time** instead of LHA — a different
-coordinate convention from the stable path. Still has no test coverage and hasn't been exercised
-end-to-end — treat as WIP despite now being public.
+coordinate convention from the stable path. `tests/test_large_fov.py` now covers
+`MultiShellFoV`/`MultiShellFlux`/`IntegralObsModel` and `large_fov_model.py`'s pure functions (see
+Tests & CI) — but `SingleShellFoV`/`SingleShellFlux` are only exercised indirectly through their
+`Multi*` wrappers, `plot_utils.py`'s `plot_satellite_tracks_lm` has no test at all, and nothing here
+is exercised against real tabsim data (just dummy-`obs` fixtures) — still treat as WIP.
 
-`model.py` also has a free-function version of the stable path's physics
-(`compute_shell_satellite_density`, `compute_total_satellite_density`, `simulate_exposed_time`) that
-duplicates what `SingleShellObs`/`MultiShellObs` do via cached properties. The class-based path is
-the one actually used by the README/docs — treat the free functions as legacy-ish unless told otherwise.
+`model.py` also has a free-function cluster duplicating the stable path's physics
+(`compute_shell_satellite_density`, `compute_total_satellite_density`, `simulate_exposed_time`) —
+confirmed **dead code**: zero callers anywhere in the package, not exported from `__init__.py`.
+Not removed yet; ask before deleting.
 
 `_legacy.py` is explicitly deprecated (see its own docstring); kept only because
 `tests/test_internal.py::test_exposure_fraction` checks it against the current
@@ -106,13 +112,15 @@ reworking (e.g. take an explicit `obstime` and drop the transit search) before i
 
 ## Tests & CI
 
-- `pytest tests/` — three files: `test_imports.py` (import smoke test), `test_internal.py` (unit
-  correctness + physical sanity checks, e.g. zero density at low inclination / high declination),
-  `test_minimal_code.py` (shape/sign checks on the README quick-start path).
+- `pytest tests/` — four files: `test_imports.py` (import smoke test), `test_internal.py` (unit
+  correctness + physical sanity checks, e.g. zero density at low inclination / high declination,
+  for the stable path), `test_large_fov.py` (see below), `test_minimal_code.py` (shape/sign checks
+  on the README quick-start path).
 - GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs pytest on
   Python 3.10 and 3.12. No lint or type-check step currently.
-- Test coverage is effectively limited to the stable small-FoV path; the large-FoV/Flux/Integral
-  classes and `plot_utils.py`/`large_fov_model.py` have no tests.
+- The large-FoV path now has tests too: `tests/test_large_fov.py` covers
+  `MultiShellFoV`/`MultiShellFlux`/`IntegralObsModel.sample_satellites`. Not
+  covered: `plot_utils.py` (`plot_sky_map`/`plot_satellite_tracks_lm`) has no tests at all.
 
 ## Current branch
 
