@@ -63,6 +63,7 @@ For more, see the demo notebooks:
 
 - Compute a full sky map of number of satellite per hour of observation: [notebooks/satellite_density_maps.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/satellite_density_maps.ipynb)
 - Compute satellite occupancy, as a function of target declination, with error bars: [notebooks/compute_satellite_occupancy.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/compute_satellite_occupancy.ipynb)
+- To explore various functionalities of the package, look at the walkthrough: [notebooks/walkthrough.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/walkthrough.ipynb)
 
 And the documentation (in progress):
 
