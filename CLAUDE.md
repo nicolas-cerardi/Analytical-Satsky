@@ -118,6 +118,10 @@ reworking (e.g. take an explicit `obstime` and drop the transit search) before i
   - None of the 6 source files under `analytical_satsky/` have a **module-level docstring** (only
     `__init__.py` does) — not a priority now, but worth adding eventually so `help(module)` and doc
     tooling have something to show when browsing by module rather than by symbol.
+- **TODO, to add later to [docs/model.md](docs/model.md):**
+  - **Numerical scheme**: the RA/Dec grid with dΩ = cos δ dα dδ for `N_init`, `Npoints` on the
+    boundary circle, and the time step `dt` for the flux, with advice on choosing them.
+  - **A symbol table and a geometry figure** (observer, shell, line of sight, impact angle).
 - [docs/model.md](docs/model.md) documents the model's physical assumptions (circular orbits,
   constant Earth radius, straight-line/constant-velocity FoV integration) — read before changing
   any equation in model.py.
