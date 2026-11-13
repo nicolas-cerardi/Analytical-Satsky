@@ -37,6 +37,18 @@ Tests & CI) — but `SingleShellFoV`/`SingleShellFlux` are only exercised indire
 `Multi*` wrappers, `plot_utils.py`'s `plot_satellite_tracks_lm` has no test at all, and nothing here
 is exercised against real tabsim data (just dummy-`obs` fixtures) — still treat as WIP.
 
+**TODO: decouple from tabsim.** All 5 classes only ever call `obs.ITRF.compute()[0]`,
+`obs.ra.compute()`, `obs.dec.compute()` — a duck-typed match for tabsim's `Observation`, not an
+actual dependency (`tabsim` isn't imported anywhere in `shell_obs.py`/`large_fov_model.py`), which
+makes standalone (non-tabsim) use harder than it needs to be. Plan: add a small public
+`BasicObservation(obsloc, ra, dec)` adapter class in `shell_obs.py`, exposing that same
+`.ITRF`/`.ra`/`.dec`-with-`.compute()` shape from a plain `EarthLocation` + `ra`/`dec` `Quantity` —
+i.e. promote `tests/test_large_fov.py`'s private `_DummyObs` fixture into the public API. No changes
+needed to the 5 classes themselves (already polymorphic over anything matching that shape). Steps:
+(1) add `BasicObservation`; (2) tighten the `obs` parameter docstrings to state the duck-typed
+contract and point to it; (3) switch `tests/test_large_fov.py`'s fixture to use it instead of its
+own private copy.
+
 `model.py` also has a free-function cluster duplicating the stable path's physics
 (`compute_shell_satellite_density`, `compute_total_satellite_density`, `simulate_exposed_time`) —
 confirmed **dead code**: zero callers anywhere in the package, not exported from `__init__.py`.
