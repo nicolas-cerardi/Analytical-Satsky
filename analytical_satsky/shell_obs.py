@@ -425,7 +425,100 @@ class MultiShellObs:
         all_inits = np.concatenate(all_inits, axis=1)
         all_ts = np.concatenate(all_ts, axis=1)
         return all_inits, all_ts
-    
+
+
+class _Computable:
+    """Wrap a value behind a ``.compute()`` method, mimicking the lazy
+    attributes of a tabsim ``Observation``."""
+
+    def __init__(self, value):
+        self._value = value
+
+    def compute(self):
+        return self._value
+
+
+class BasicObservation:
+    """
+    Minimal observation description for the large FoV models.
+
+    Standalone replacement for a tabsim ``Observation``: it exposes the
+    only three attributes that ``SingleShellFoV``, ``MultiShellFoV``,
+    ``SingleShellFlux``, ``MultiShellFlux`` and ``IntegralObsModel`` read
+    from their ``obs`` argument, built from a plain observer location and
+    pointing direction.
+
+    Parameters
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location. Must be a single location.
+    ra : astropy.units.Quantity
+        Right ascension of the telescope pointing, ICRS. Must be a scalar
+        angular quantity.
+    dec : astropy.units.Quantity
+        Declination of the telescope pointing, ICRS. Must be a scalar
+        angular quantity.
+
+    Attributes
+    ----------
+    obsloc : astropy.coordinates.EarthLocation
+        Observer location.
+    ITRF : object
+        ``ITRF.compute()`` returns the observer geocentric (ITRF)
+        position in meters, as a ``numpy.ndarray`` of shape ``(1, 3)``.
+    ra : object
+        ``ra.compute()`` returns the pointing right ascension in degrees,
+        as a float.
+    dec : object
+        ``dec.compute()`` returns the pointing declination in degrees, as
+        a float.
+
+    Raises
+    ------
+    TypeError
+        If ``obsloc`` is not an ``EarthLocation``, or if ``ra`` or ``dec``
+        is not an Astropy quantity.
+    ValueError
+        If ``obsloc``, ``ra`` or ``dec`` is not scalar.
+    astropy.units.UnitConversionError
+        If ``ra`` or ``dec`` is not angular.
+
+    Examples
+    --------
+    >>> import astropy.units as u
+    >>> from astropy.coordinates import EarthLocation
+    >>> from analytical_satsky import BasicObservation
+    >>> obsloc = EarthLocation(lat=-30.7 * u.deg, lon=21.4 * u.deg, height=1000 * u.m)
+    >>> obs = BasicObservation(obsloc, ra=83.0 * u.deg, dec=-30.0 * u.deg)
+    >>> obs.ra.compute()
+    83.0
+    """
+
+    def __init__(self, obsloc, ra, dec):
+        if not isinstance(obsloc, EarthLocation):
+            raise TypeError("obsloc must be an astropy EarthLocation.")
+        if not obsloc.isscalar:
+            raise ValueError("obsloc must be a single location.")
+
+        self.obsloc = obsloc
+        itrf_m = np.array([
+            obsloc.x.to_value(u.m),
+            obsloc.y.to_value(u.m),
+            obsloc.z.to_value(u.m),
+        ])
+        self.ITRF = _Computable(itrf_m[None, :])
+        self.ra = _Computable(self._angle_to_deg(ra, "ra"))
+        self.dec = _Computable(self._angle_to_deg(dec, "dec"))
+
+    @staticmethod
+    def _angle_to_deg(angle, name):
+        if not isinstance(angle, Quantity):
+            raise TypeError(f"{name} must be an astropy Quantity with angular units.")
+        if not angle.isscalar:
+            raise ValueError(f"{name} must be a scalar.")
+        return float(angle.to_value(u.deg))
+
+
 class SingleShellFoV:
     """
     Cached model for the contribution of a single satellite shell, sampled
@@ -438,8 +531,13 @@ class SingleShellFoV:
 
     Parameters
     ----------
-    obs : object
-        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``.
+    obs : BasicObservation or object
+        Observation description. Either a ``BasicObservation``, or any
+        object exposing the same three attributes, such as a tabsim
+        ``Observation``: ``obs.ITRF.compute()`` returning geocentric (ITRF)
+        positions in meters, shape ``(n, 3)`` (only the first row is used);
+        ``obs.ra.compute()`` and ``obs.dec.compute()`` returning the
+        pointing right ascension and declination in degrees.
         Only used to derive ``obsloc``/``pointing_ra``/``pointing_dec`` when
         those are not given directly.
     shell : pandas.Series
@@ -696,10 +794,14 @@ class MultiShellFoV:
 
     Parameters
     ----------
-    obs : object
-        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``,
-        such as a ``tabsim.dask.observation.Observation`` instance. Only
-        used to derive ``obsloc``/``pointing_ra``/``pointing_dec``.
+    obs : BasicObservation or object
+        Observation description. Either a ``BasicObservation``, or any
+        object exposing the same three attributes, such as a tabsim
+        ``Observation``: ``obs.ITRF.compute()`` returning geocentric (ITRF)
+        positions in meters, shape ``(n, 3)`` (only the first row is used);
+        ``obs.ra.compute()`` and ``obs.dec.compute()`` returning the
+        pointing right ascension and declination in degrees.
+        Used to derive ``obsloc``/``pointing_ra``/``pointing_dec``.
     shells_df : pandas.DataFrame
         Table describing the orbital shells of the constellation.
     ndec : int
@@ -854,8 +956,13 @@ class SingleShellFlux:
 
     Parameters
     ----------
-    obs : object
-        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``.
+    obs : BasicObservation or object
+        Observation description. Either a ``BasicObservation``, or any
+        object exposing the same three attributes, such as a tabsim
+        ``Observation``: ``obs.ITRF.compute()`` returning geocentric (ITRF)
+        positions in meters, shape ``(n, 3)`` (only the first row is used);
+        ``obs.ra.compute()`` and ``obs.dec.compute()`` returning the
+        pointing right ascension and declination in degrees.
         Only used to derive ``obsloc``/``pointing_ra``/``pointing_dec`` when
         those are not given directly.
     shell : pandas.Series
@@ -1137,9 +1244,14 @@ class MultiShellFlux:
 
     Parameters
     ----------
-    obs : object
-        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``,
-        used to derive ``obsloc``/``pointing_ra``/``pointing_dec``.
+    obs : BasicObservation or object
+        Observation description. Either a ``BasicObservation``, or any
+        object exposing the same three attributes, such as a tabsim
+        ``Observation``: ``obs.ITRF.compute()`` returning geocentric (ITRF)
+        positions in meters, shape ``(n, 3)`` (only the first row is used);
+        ``obs.ra.compute()`` and ``obs.dec.compute()`` returning the
+        pointing right ascension and declination in degrees.
+        Used to derive ``obsloc``/``pointing_ra``/``pointing_dec``.
     shells_df : pandas.DataFrame
         Table describing the orbital shells of the constellation.
     Npoints : int
@@ -1290,8 +1402,13 @@ class IntegralObsModel:
 
     Parameters
     ----------
-    obs : object
-        Pointing/observatory object exposing ``.ITRF``, ``.ra``, ``.dec``.
+    obs : BasicObservation or object
+        Observation description. Either a ``BasicObservation``, or any
+        object exposing the same three attributes, such as a tabsim
+        ``Observation``: ``obs.ITRF.compute()`` returning geocentric (ITRF)
+        positions in meters, shape ``(n, 3)`` (only the first row is used);
+        ``obs.ra.compute()`` and ``obs.dec.compute()`` returning the
+        pointing right ascension and declination in degrees.
     shells_df : pandas.DataFrame
         Table describing the orbital shells of the constellation.
     Lfov : astropy.units.Quantity

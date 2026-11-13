@@ -10,7 +10,7 @@ import astropy.units as u
 from astropy.coordinates import EarthLocation
 from astropy.time import Time
 
-from analytical_satsky import MultiShellFoV, MultiShellFlux, IntegralObsModel
+from analytical_satsky import BasicObservation, MultiShellFoV, MultiShellFlux, IntegralObsModel
 from analytical_satsky.large_fov_model import (
     radec_to_unitvec,
     local_basis_at_radec,
@@ -25,36 +25,9 @@ CATALOGUE_COLUMNS = [
 ]
 
 
-class _DummyComputable:
-    """Mimics a dask-delayed-like object exposing ``.compute()``, as used by
-    tabsim's ``Observation.ITRF``/``.ra``/``.dec``."""
-
-    def __init__(self, value):
-        self._value = value
-
-    def compute(self):
-        return self._value
-
-
-class _DummyObs:
-    """Minimal stand-in for a tabsim ``Observation``, exposing only the
-    ``.ITRF``/``.ra``/``.dec`` attributes that ``MultiShellFoV``/``MultiShellFlux``/
-    ``IntegralObsModel`` read from it."""
-
-    def __init__(self, obsloc: EarthLocation, ra_deg: float, dec_deg: float):
-        itrf_m = np.array([
-            obsloc.x.to_value(u.m),
-            obsloc.y.to_value(u.m),
-            obsloc.z.to_value(u.m),
-        ])
-        self.ITRF = _DummyComputable(itrf_m[None, :])  # shape (1, 3), like obs.ITRF.compute()
-        self.ra = _DummyComputable(ra_deg)
-        self.dec = _DummyComputable(dec_deg)
-
-
-def _make_dummy_obs():
+def _make_obs():
     obsloc = EarthLocation(lat=30 * u.deg, lon=0 * u.deg, height=0 * u.m)
-    return _DummyObs(obsloc, ra_deg=83.0, dec_deg=-30.0)
+    return BasicObservation(obsloc, ra=83.0 * u.deg, dec=-30.0 * u.deg)
 
 
 def _assert_empty_catalogue(catalogue):
@@ -62,11 +35,35 @@ def _assert_empty_catalogue(catalogue):
     assert list(catalogue.columns) == CATALOGUE_COLUMNS
 
 
+def test_basic_observation_contract():
+    # BasicObservation must expose exactly what the large-FoV classes read
+    # from their ``obs`` argument: ``.ITRF``/``.ra``/``.dec``, each with a
+    # ``.compute()`` method.
+    obsloc = EarthLocation(lat=-30.7 * u.deg, lon=21.4 * u.deg, height=1000 * u.m)
+    obs = BasicObservation(obsloc, ra=83.0 * u.deg, dec=-30.0 * u.deg)
+
+    itrf = obs.ITRF.compute()
+    assert itrf.shape == (1, 3)
+    expected_itrf = [obsloc.x.to_value(u.m), obsloc.y.to_value(u.m), obsloc.z.to_value(u.m)]
+    assert np.allclose(itrf[0], expected_itrf, rtol=0, atol=1e-6)
+
+    # Same call as the classes make to rebuild the observer location.
+    rebuilt = EarthLocation.from_geocentric(*itrf[0] * u.m)
+    assert np.isclose(rebuilt.lat.deg, obsloc.lat.deg, rtol=0, atol=1e-9)
+    assert np.isclose(rebuilt.lon.deg, obsloc.lon.deg, rtol=0, atol=1e-9)
+    assert np.isclose(rebuilt.height.to_value(u.m), 1000.0, rtol=0, atol=1e-6)
+
+    ra, dec = obs.ra.compute(), obs.dec.compute()
+    assert isinstance(ra, float) and isinstance(dec, float)
+    assert ra == 83.0
+    assert dec == -30.0
+
+
 def test_multi_shell_fov_sample_satellites_empty():
     # A shell with n=0 satellites always samples zero crossings, so
     # nsat_shell_obs is exactly zero everywhere and rng.poisson(0) is
     # deterministically 0 regardless of seed.
-    obs = _make_dummy_obs()
+    obs = _make_obs()
     shells_df = pd.DataFrame({"n": [0], "h": [550.0], "i": [53.0]})
 
     multi_shell_fov = MultiShellFoV(
@@ -83,7 +80,7 @@ def test_multi_shell_fov_sample_satellites_empty():
 
 
 def test_multi_shell_flux_sample_satellites_empty():
-    obs = _make_dummy_obs()
+    obs = _make_obs()
     shells_df = pd.DataFrame({"n": [0], "h": [550.0], "i": [53.0]})
     t_init_mjd = Time("2026-01-01T00:00:00")
 
@@ -102,7 +99,7 @@ def test_multi_shell_flux_sample_satellites_empty():
 
 
 def test_integral_obs_model_sample_satellites_empty():
-    obs = _make_dummy_obs()
+    obs = _make_obs()
     shells_df = pd.DataFrame({"n": [0], "h": [550.0], "i": [53.0]})
     t_init_mjd = Time("2026-01-01T00:00:00")
 
@@ -128,7 +125,7 @@ def test_integral_obs_model_sample_satellites_regression_snapshot():
     # (initial FoV snapshot + time-stepped flux sampling, orbital element
     # computation, rng draws). These values were computed with the current
     # implementation and are not independently derived by hand.
-    obs = _make_dummy_obs()
+    obs = _make_obs()
     shells_df = pd.DataFrame({"n": [1000.0], "h": [550.0], "i": [53.0]})
     t_init_mjd = Time("2026-01-01T00:00:00")
 
@@ -227,7 +224,7 @@ def test_sampled_satellites_enter_the_fov():
     # (that's covered by the snapshot test above). A 3-shell config is used
     # (rather than a single shell) so this is exercised across more than a
     # couple of satellites and more than one inclination.
-    obs = _make_dummy_obs()
+    obs = _make_obs()
     shells_df = pd.DataFrame({
         "n": [1000.0, 800.0, 600.0],
         "h": [550.0, 650.0, 450.0],

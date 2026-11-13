@@ -23,6 +23,7 @@ The public API is organized into three categories:
 
 ### Large FoV model and satellite sampling
 
+* [`BasicObservation`](#analytical_satsky.BasicObservation)
 * [`SingleShellFoV`](#analytical_satsky.SingleShellFoV)
 * [`MultiShellFoV`](#analytical_satsky.MultiShellFoV)
 * [`SingleShellFlux`](#analytical_satsky.SingleShellFlux)
@@ -61,6 +62,11 @@ For information on the model assumptions see the [model page](model.md).
 
 This path parametrizes targets by true RA/Dec and an explicit observation time, instead of the
 local-hour-angle convention used above.
+
+The classes below take an `obs` argument describing the observer location and the telescope
+pointing. It is either a `BasicObservation`, or a tabsim `Observation`.
+
+::: analytical_satsky.BasicObservation
 
 ::: analytical_satsky.SingleShellFoV
 

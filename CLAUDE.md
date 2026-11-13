@@ -22,32 +22,37 @@ drop time-dependence (shells are defined w.r.t. Earth's instantaneous rotation a
 [docs/model.md](docs/model.md)).
 
 **In development, now exported, documented, and partially tested**: `SingleShellFoV`, `MultiShellFoV`,
-`SingleShellFlux`, `MultiShellFlux`, `IntegralObsModel` in shell_obs.py are exported from
+`SingleShellFlux`, `MultiShellFlux`, `IntegralObsModel`, and the `BasicObservation` adapter (see
+below) in shell_obs.py are exported from
 `__init__.py` and documented with numpydoc docstrings, referenced in `docs/api.md`'s "Large FoV
 model and satellite sampling" section. [large_fov_model.py](analytical_satsky/large_fov_model.py)'s
 functions have docstrings too but are **not** yet referenced in `api.md`; this includes
 `satellite_positions_gcrs` and `positions_to_lm`, added to support
 [notebooks/satellite_sampling.ipynb](notebooks/satellite_sampling.ipynb) and
 `plot_utils.py`'s `plot_satellite_tracks_lm`. This is the large-FoV /
-satellite-catalogue sampling path mentioned as "in development" in the README roadmap. It
+satellite-catalogue sampling path, shown in the README quick start's second example. It
 parametrizes targets by **true RA/Dec + an explicit MJD time** instead of LHA — a different
 coordinate convention from the stable path. `tests/test_large_fov.py` now covers
 `MultiShellFoV`/`MultiShellFlux`/`IntegralObsModel` and `large_fov_model.py`'s pure functions (see
 Tests & CI) — but `SingleShellFoV`/`SingleShellFlux` are only exercised indirectly through their
 `Multi*` wrappers, `plot_utils.py`'s `plot_satellite_tracks_lm` has no test at all, and nothing here
-is exercised against real tabsim data (just dummy-`obs` fixtures) — still treat as WIP.
+is exercised against real tabsim data in the test suite (tests use `BasicObservation`) — still treat
+as WIP.
 
-**TODO: decouple from tabsim.** All 5 classes only ever call `obs.ITRF.compute()[0]`,
-`obs.ra.compute()`, `obs.dec.compute()` — a duck-typed match for tabsim's `Observation`, not an
-actual dependency (`tabsim` isn't imported anywhere in `shell_obs.py`/`large_fov_model.py`), which
-makes standalone (non-tabsim) use harder than it needs to be. Plan: add a small public
-`BasicObservation(obsloc, ra, dec)` adapter class in `shell_obs.py`, exposing that same
-`.ITRF`/`.ra`/`.dec`-with-`.compute()` shape from a plain `EarthLocation` + `ra`/`dec` `Quantity` —
-i.e. promote `tests/test_large_fov.py`'s private `_DummyObs` fixture into the public API. No changes
-needed to the 5 classes themselves (already polymorphic over anything matching that shape). Steps:
-(1) add `BasicObservation`; (2) tighten the `obs` parameter docstrings to state the duck-typed
-contract and point to it; (3) switch `tests/test_large_fov.py`'s fixture to use it instead of its
-own private copy.
+**The `obs` argument: `BasicObservation` or tabsim.** All 5 classes only ever call
+`obs.ITRF.compute()[0]` (meters, shape `(n, 3)`), `obs.ra.compute()`, `obs.dec.compute()` (degrees)
+— a duck-typed match for tabsim's `Observation`, not an actual dependency (`tabsim` isn't imported
+anywhere in `shell_obs.py`/`large_fov_model.py`). For standalone use,
+`BasicObservation(obsloc, ra, dec)` in `shell_obs.py` exposes that same
+`.ITRF`/`.ra`/`.dec`-with-`.compute()` shape from a plain scalar `EarthLocation` + scalar angular
+`ra`/`dec` `Quantity` (documented as ICRS; converted to degrees internally). The 5 classes' `obs`
+docstrings state this contract. Verified once by hand (not in the test suite): given tabsim's exact
+first-antenna location, start MJD and duration, `BasicObservation` reproduces the tabsim-driven
+`IntegralObsModel` catalogue exactly.
+[notebooks/satellite_sampling.ipynb](notebooks/satellite_sampling.ipynb) shows both routes: section 1
+standalone with `BasicObservation`, section 2 with tabsim (needs `tabsim` installed). Their
+catalogues differ on purpose — different start time, duration (tabsim's is one fine step short of
+the hour) and location (tabsim passes its first antenna, ~200 m from `of_site("SKA-Low")`).
 
 `model.py` also has a free-function cluster duplicating the stable path's physics
 (`compute_shell_satellite_density`, `compute_total_satellite_density`, `simulate_exposed_time`) —
@@ -111,7 +116,7 @@ reworking (e.g. take an explicit `obstime` and drop the transit search) before i
     If the trigger branch changes (e.g. to `main`) or a new environment gets created, check this
     setting again.
   - The 5 WIP `shell_obs.py` classes (`SingleShellFoV`, `MultiShellFoV`, `SingleShellFlux`,
-    `MultiShellFlux`, `IntegralObsModel`) are now referenced in `api.md`'s "Large FoV model and
+    `MultiShellFlux`, `IntegralObsModel`) and `BasicObservation` are now referenced in `api.md`'s "Large FoV model and
     satellite sampling" section. `large_fov_model.py`'s functions are documented but still **not**
     referenced in `api.md` — add `:::` directives for them there if/when that file's functions
     graduate too.
@@ -135,7 +140,9 @@ reworking (e.g. take an explicit `obstime` and drop the transit search) before i
 - GitHub Actions ([.github/workflows/tests.yml](.github/workflows/tests.yml)) runs pytest on
   Python 3.10 and 3.12. No lint or type-check step currently.
 - The large-FoV path now has tests too: `tests/test_large_fov.py` covers
-  `MultiShellFoV`/`MultiShellFlux`/`IntegralObsModel.sample_satellites`. Not
+  `MultiShellFoV`/`MultiShellFlux`/`IntegralObsModel.sample_satellites`, all built on a
+  `BasicObservation` fixture (`_make_obs`), plus `test_basic_observation_contract` for the adapter's
+  `.ITRF`/`.ra`/`.dec` shapes and units (its input-validation errors are deliberately not tested). Not
   covered: `plot_utils.py` (`plot_sky_map`/`plot_satellite_tracks_lm`) has no tests at all.
 
 ## Current branch

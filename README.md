@@ -61,6 +61,30 @@ multi_shell_obs = MultiShellObs(
 print(multi_shell_obs.total_nsats)
 ```
 
+For large fields of view, the integral model samples a mock catalogue of the satellites crossing the field of view, from a true RA/Dec pointing and an explicit observation time:
+
+```python
+from astropy.time import Time
+from analytical_satsky import BasicObservation, IntegralObsModel
+
+obs = BasicObservation(obsloc, ra=27.0*u.deg, dec=-30.0*u.deg)
+
+integral_obs_model = IntegralObsModel(
+    obs,
+    shells_df,
+    Lfov=4.0*u.deg,
+    t_exp_mjd=(10*u.min).to_value(u.day),
+    t_init_mjd=Time("2026-01-01T11:16:00"),
+    ndec=900,
+    nra=1800,
+    Npoints=1000,
+    dt=5.0*u.s,
+)
+
+satellite_catalogue = integral_obs_model.sample_satellites(seed=1)
+print(satellite_catalogue)
+```
+
 For more, see the demo notebooks:
 
 - Compute a full sky map of number of satellite per hour of observation: [notebooks/satellite_density_maps.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/satellite_density_maps.ipynb)
@@ -83,7 +107,7 @@ And the [online documentation](https://nicolas-cerardi.github.io/Analytical-Sats
 
 ## Roadmap
 
-- In development: a standalone observation adapter, so that the large FoV model and satellite sampling can be used without an external observation object; cleanup of unused legacy functions.
+- In development: cleanup of unused legacy functions.
 
 ## Citation
 

@@ -61,7 +61,9 @@ This repository also implements an extension to the previous model, dropping two
 
     and $N_{\rm flux}$ the flux of ingressing satellites:
 
-    $$N_{\rm flux} = \int_0^{T_{\rm obs}} \oint \sum_{k \in \{N,S\}} \frac{\rho_{\rm sat}}{2}\, \max\left(0, -\vec{w}_k \cdot \hat{n}\right) R_{\rm FoV}\, {\rm d}\theta\, {\rm d}t$$
+    $$N_{\rm flux} = \int_0^{T_{\rm obs}} \oint \sum_{k \in \{N,S\}} \frac{\rho_{\rm sat}}{2}\, \max\left(0, -\vec{w}_k \cdot \hat{n}\right) R_{\rm FoV}\, {\rm d}\theta\, {\rm d}t,$$
+
+    with $k \in \{N,S\}$ indicating a switch between the north-ward and south-ward direction solution for the given shell.
 
 ## Coordinate conventions
 
