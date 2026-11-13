@@ -13,16 +13,18 @@ Modelling satellite constellations seen from astronomical observatories
 ## Overview
 
 The number of artificial satellites in low earth orbit is increasing very fast, due to the deployment of large communication constellations, comprising from hundreds to tens of thousands of satellites.
-This already has in impact on astronomical observations, as optical and radio telescopes respectively see more frequent trails and radio frequency interferences left by these satellites. Still, this is only a glimpse of what will happen in the next decade, when the number of satellites could be multiplied by ten.
+This already has an impact on astronomical observations, as optical and radio telescopes respectively see more frequent trails and radio frequency interferences left by these satellites. Still, this is only a glimpse of what will happen in the next decade, when the number of satellites could be multiplied by ten.
 
-Predicting the impact on science from these satellites is a difficult task, and requires to simulate the trajectories of up to 100,000 satellite. Instead of this discrete description of each individual satellite, this package implements an analytical model for predicting the number of satellites, as presented in [Bassa et al. 2022](https://www.aanda.org/articles/aa/abs/2022/01/aa42101-21/aa42101-21.html). It is here adapted to radio telescopes, providing dedicated features.
+Predicting the impact on science from these satellites is a difficult task, and requires to simulate the trajectories of up to 100,000 satellites. Instead of this discrete description of each individual satellite, this package implements an analytical model for predicting the number of satellites, as presented in [Bassa et al. 2022](https://www.aanda.org/articles/aa/abs/2022/01/aa42101-21/aa42101-21.html). It is here adapted to radio telescopes, providing dedicated features.
 
 ## Features
 
 - Load predefined satellite shell tables from the major upcoming constellations
+- Implements a analytical modelling of satellite constellations, specifically adapted to radio telescopes' large fields of view.
 - Compute sky maps of the instantaneous satellite density, from a specific observatory
 - Predict the number of satellites entering the field of view for a given observation
 - Estimate the fraction of time with at least one satellite in the field of view.
+- Samples mock satellite orbits from the analytical density. 
 
 ## Installation
 
@@ -63,12 +65,14 @@ For more, see the demo notebooks:
 
 - Compute a full sky map of number of satellite per hour of observation: [notebooks/satellite_density_maps.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/satellite_density_maps.ipynb)
 - Compute satellite occupancy, as a function of target declination, with error bars: [notebooks/compute_satellite_occupancy.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/compute_satellite_occupancy.ipynb)
+- Sample mock satellite catalogues: [notebooks/satellite_sampling.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/satellite_sampling.ipynb)
 - To explore various functionalities of the package, look at the walkthrough: [notebooks/walkthrough.ipynb](https://github.com/nicolas-cerardi/Analytical-Satsky/blob/main/notebooks/walkthrough.ipynb)
 
-And the documentation (in progress):
+And the [online documentation](https://nicolas-cerardi.github.io/Analytical-Satsky/) (in progress):
 
-- [API reference](docs/api.md)
-- [Constellations](docs/constellations.md)
+- [API reference](https://nicolas-cerardi.github.io/Analytical-Satsky/api/)
+- [Constellations](https://nicolas-cerardi.github.io/Analytical-Satsky/constellations/)
+- [Models Description](https://nicolas-cerardi.github.io/Analytical-Satsky/model/)
 
 ## Repository structure
 
@@ -79,7 +83,7 @@ And the documentation (in progress):
 
 ## Roadmap
 
-- In development: sampling realistic satellite trajectories and computing an integral model.
+- In development: a standalone observation adapter, so that the large FoV model and satellite sampling can be used without an external observation object; cleanup of unused legacy functions.
 
 ## Citation
 
